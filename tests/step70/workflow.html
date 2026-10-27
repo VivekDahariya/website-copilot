@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Workflow Lab</title>
+<style>
+body { font: 16px Arial; max-width: 650px; margin: 60px auto; }
+section { padding: 24px; border: 1px solid #ddd; border-radius: 12px; }
+label { display: block; margin: 14px 0; }
+input, select, button { padding: 10px; margin-top: 5px; }
+button { cursor: pointer; margin-right: 10px; }
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<h1>Workflow Lab</h1>
+
+<section id="home">
+  <h2>Welcome</h2>
+  <p>Manage your project preferences.</p>
+  <button id="open-settings">Project Settings</button>
+</section>
+
+<section id="settings" class="hidden">
+  <h2>Project Settings</h2>
+  <button id="open-preferences">Notification Preferences</button>
+</section>
+
+<section id="preferences" class="hidden">
+  <h2>Notification Preferences</h2>
+
+  <label>
+    Project Name
+    <input id="project-name" aria-label="Project Name">
+  </label>
+
+  <label>
+    Contact Email
+    <input id="contact-email" type="email" aria-label="Contact Email">
+  </label>
+
+  <label>
+    Notification Channel
+    <select id="channel" aria-label="Notification Channel">
+      <option value="">Choose channel</option>
+      <option value="Email">Email</option>
+      <option value="Dashboard">Dashboard</option>
+    </select>
+  </label>
+
+  <button id="continue">Continue</button>
+</section>
+
+<section id="confirmation" class="hidden">
+  <h2>Review Preferences</h2>
+  <p id="summary"></p>
+  <label>
+    <input type="checkbox" id="confirm" aria-label="Confirm Preferences">
+    Confirm Preferences
+  </label>
+  <button id="save">Save Preferences</button>
+</section>
+
+<section id="success" class="hidden">
+  <h2>Preferences saved successfully</h2>
+  <p id="saved-details"></p>
+</section>
+
+<script>
+const sections = ["home", "settings", "preferences", "confirmation", "success"];
+
+function show(id) {
+  sections.forEach(section => {
+    document.getElementById(section).classList.toggle("hidden", section !== id);
+  });
+}
+
+document.getElementById("open-settings").onclick = () => show("settings");
+
+document.getElementById("open-preferences").onclick = () => {
+  setTimeout(() => show("preferences"), 500);
+};
+
+document.getElementById("continue").onclick = () => {
+  const name = document.getElementById("project-name").value.trim();
+  const email = document.getElementById("contact-email").value.trim();
+  const channel = document.getElementById("channel").value;
+
+  if (!name || !email || !channel) {
+    alert("Complete all fields");
+    return;
+  }
+
+  document.getElementById("summary").textContent =
+    `Project: ${name} | Email: ${email} | Channel: ${channel}`;
+
+  show("confirmation");
+};
+
+document.getElementById("save").onclick = () => {
+  if (!document.getElementById("confirm").checked) {
+    alert("Confirm preferences first");
+    return;
+  }
+
+  const name = document.getElementById("project-name").value.trim();
+  const email = document.getElementById("contact-email").value.trim();
+  const channel = document.getElementById("channel").value;
+
+  document.getElementById("saved-details").textContent =
+    `Project: ${name} | Email: ${email} | Channel: ${channel}`;
+
+  show("success");
+};
+</script>
+</body>
+</html>

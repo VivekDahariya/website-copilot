@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { verifyGoal } from '../src/agent/goal-verifier.js';
+import { groundFormGoal } from '../src/agent/task-interpreter.js';
+
+const intro = 'Artificial intelligence is a branch of computer science that focuses on the creation of intelligent machines, including robots, computers, and software that can perform tasks that typically require human intelligence, such as learning, problem-solving, and decision-making.';
+assert.ok(intro.length > 200);
+const field = (label, value, tag='input', extras={}) => ({ref:'e1',label,currentValue:value,tag,editable:tag!=='select',...extras});
+const single = (expectedValue, label='Textarea') => ({type:'form_state',fieldLabel:label,expectedValue});
+const obs = e => ({url:'https://sample.test',title:'Web form',visibleBodyText:'',headings:['Web form'],actionableElements:[e]});
+assert.equal(verifyGoal(obs(field('Textarea',intro,'textarea')),single(intro)).completed,true);
+console.log('PASS: Entire 273-character textarea satisfies exact form goal');
+assert.equal(verifyGoal(obs(field('Textarea',intro.slice(0,200),'textarea')),single(intro)).completed,false);
+console.log('PASS: Truncated prefix cannot fake completion');
+assert.equal(verifyGoal(obs(field('Textarea',intro,'textarea',{currentValueTruncated:true})),single(intro)).completed,false);
+console.log('PASS: Truncation flag cannot fake completion');
+const longLabel='Dropdown (select)\n      Open this select menu\n One\n';
+const normalized=groundFormGoal(single('Two',longLabel),[
+ {tag:'select',type:'',label:longLabel,options:[{label:'Open this select menu',value:''},{label:'One',value:'1'},{label:'Two',value:'2'}]}
+], 'choose the second option');
+assert.equal(normalized.fieldLabel,'Dropdown (select)');
+assert.equal(normalized.expectedValue,'Two');
+console.log('PASS: Interpreted dropdown label is concise and ordinal value is correct');
+assert.equal(verifyGoal(obs(field('Dropdown (select) Open this select menu One Two Three','2','select',{selectedLabel:'Two',editable:false})),normalized).completed,true);
+console.log('PASS: Selected label Two verifies even when HTML value is 2');
+assert.equal(verifyGoal(obs(field('Dropdown (select) Open this select menu One Two Three','1','select',{selectedLabel:'One',editable:false})),normalized).completed,false);
+console.log('PASS: Wrong option One is not accepted');
+assert.equal(verifyGoal(obs(field('Something entirely different','2','select',{selectedLabel:'Two',editable:false})),normalized).completed,false);
+console.log('PASS: Unrelated field is not accepted');
+const observerSource=readFileSync(new URL('../src/observer/dom-observer.js',import.meta.url),'utf8');
+assert.match(observerSource,/currentValue\?\.slice\(0, 8192\)/);
+assert.match(observerSource,/const secretLike = element\.type === "password"/);
+assert.match(observerSource,/secretLike \? "\[REDACTED\]"/);
+assert.match(observerSource,/selectedLabel: tag === "select"/);
+console.log('PASS: Observer keeps longer values, preserves password redaction and select labels');
+const executorSource=readFileSync(new URL('../src/executor/action-executor.js',import.meta.url),'utf8');
+assert.match(executorSource,/SELECT_OPTION_UNAVAILABLE/);
+assert.match(executorSource,/option\.label\.trim\(\) === requested\.trim\(\)/);
+console.log('PASS: Select executor resolves labels to real enabled values');
+console.log('74K.49C: 9/9 offline regression checks PASS');

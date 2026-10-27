@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+
+# Credentials and private configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+.netrc
+credentials.json
+secrets.json
+*service-account*.json
+
+# Runtime data and browser sessions
+workspace/
+temp/
+tmp/
+downloads/
+sessions/
+storage-state*.json
+cookies.json
+auth.json
+*.har
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Build and test artifacts
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+.cache/
+.nyc_output/
+
+# Development backups and historical snapshots
+*.bak
+*.bak-*
+*.bak.*
+*.pre[0-9]*
+src_before_*/
+.74K*/
+.stage-*/
+.release-backups/
+.release-*/
+
+# Benchmarks and temporary documentation
+benchmark-results/
+benchmark-*.log
+*_README.txt
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating system and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local scratch files
+/output/
+/outputs/
+*.tmp
+*.swp
+*.swo

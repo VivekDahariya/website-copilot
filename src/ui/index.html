@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f9ff">
+<title>Website CoPilot · Autonomous Browser Agent</title>
+<style>
+:root{color-scheme:light;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--ink:#172941;--muted:#72849d;--blue:#3178f6;--blue-dark:#1f65e2;--line:#e6edf7;--bg:#f5f8fe;--surface:#fff;--soft:#edf4ff;--shadow:0 8px 30px rgba(46,81,143,.055)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer;transition:background .17s,border-color .17s,transform .17s,box-shadow .17s}
+button:disabled{opacity:.55;cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid rgba(49,120,246,.18);outline-offset:2px}
+svg{display:block}
+.icon{width:18px;height:18px;flex:none;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.icon.sm{width:16px;height:16px}.icon.lg{width:21px;height:21px}
+.topbar{height:78px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:30;box-shadow:0 1px 5px rgba(15,48,100,.025)}
+.brand{display:flex;align-items:center;gap:13px;text-decoration:none;color:inherit}.brandmark{height:42px;width:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#65b4ff,#2476f3);box-shadow:0 6px 16px rgba(37,115,239,.19);color:#fff}.brandmark .icon{width:23px;height:23px;stroke-width:2}
+.brandname{font-weight:790;font-size:20px;letter-spacing:-.75px;line-height:1.1}.brand-sub{font-size:12px;color:#8090a6;margin-top:5px;font-weight:470}
+.top-right{display:flex;align-items:center;gap:12px}.local-badge{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #e6f0fc;background:#f9fcff;color:#5b728c;border-radius:11px;font-size:12px;font-weight:600}.online-dot{height:8px;width:8px;border-radius:50%;background:#24b47e;box-shadow:0 0 0 3px #e6f8f0}
+.icon-button{height:38px;width:38px;border:1px solid #e6edf6;border-radius:11px;background:#fff;color:#6c83a0;display:grid;place-items:center}.avatar{height:37px;width:37px;background:#e6efff;border:1px solid #d5e5ff;color:#3178f6;border-radius:50%;font-size:14px;font-weight:800;display:grid;place-items:center}
+.shell{display:grid;grid-template-columns:226px minmax(0,1fr);min-height:calc(100vh - 78px)}
+.sidebar{background:linear-gradient(180deg,#fff,#fbfcff);border-right:1px solid var(--line);padding:28px 14px 20px;display:flex;flex-direction:column;gap:6px;min-height:calc(100vh - 78px);position:sticky;top:78px;height:calc(100vh - 78px)}
+.nav-kicker{padding:0 14px 10px;color:#9babc0;letter-spacing:1.15px;text-transform:uppercase;font-weight:750;font-size:10px}
+.nav-item{width:100%;padding:12px 14px;display:flex;align-items:center;gap:12px;border:1px solid transparent;border-radius:11px;background:transparent;color:#556a84;text-align:left;font-size:13.5px;font-weight:630;position:relative}
+.nav-item:hover{background:#f5f8fe;color:#2a6ee9}.nav-item.active{color:#2672ee;background:#e9f2ff;border-color:#e4edff}.nav-item.active .icon{stroke-width:2.1}.nav-item .nav-trail{margin-left:auto;font-size:11px;color:#a7b6c8}
+.placeholder{cursor:not-allowed;position:relative}.placeholder:hover{background:#f6f8fc!important;color:#8da0b8!important}.placeholder:hover:after,.placeholder:focus-visible:after{content:"Not Implemented yet";position:absolute;z-index:50;top:calc(100% + 7px);left:12px;padding:8px 11px;font-size:11px;line-height:1;white-space:nowrap;background:#22334a;color:white;border-radius:8px;box-shadow:0 9px 20px rgba(24,44,73,.15);pointer-events:none}
+.sidebar-spacer{flex:1}.agent-health{border:1px solid #e7edf5;background:#fff;border-radius:13px;padding:13px 12px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)}.health-dot{height:11px;width:11px;background:#23b983;border-radius:50%;box-shadow:0 0 0 4px #e8f9f1;flex:none}.health-title{font-size:12px;font-weight:750}.health-caption{font-size:11px;color:#8c9eb5;margin-top:4px}
+.main-content{width:100%;max-width:1580px;margin:0 auto;padding:27px 30px 40px;min-width:0}
+.page-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:20px}.page-heading h1{font-weight:790;margin:0;font-size:24px;letter-spacing:-.85px}.page-heading p{margin:6px 0 0;color:#8798ac;font-size:13px}.stage-indicator{display:flex;align-items:center;gap:8px;font-size:12px;color:#637b99;font-weight:650;background:#fff;border:1px solid #e5edf7;border-radius:30px;padding:9px 12px}.stage-indicator .online-dot{width:7px;height:7px}
+.card{background:#fff;border:1px solid #e6edf7;border-radius:17px;box-shadow:var(--shadow)}
+.task-card{padding:21px 23px 19px;position:relative;overflow:hidden}.task-card:before{content:"";position:absolute;right:-65px;top:-120px;background:radial-gradient(circle,rgba(81,157,255,.115),transparent 70%);width:430px;height:270px;pointer-events:none}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:13px;position:relative}.card-head h2{font-size:14px;font-weight:760;margin:0;letter-spacing:-.15px}.micro-note{font-size:11px;color:#99a9bb;font-weight:550}
+.form-area{position:relative;display:flex;align-items:stretch;gap:12px}.instruction-wrap{flex:1;min-width:0}.task-input{resize:vertical;min-height:72px;max-height:240px;width:100%;padding:15px 16px;border:1px solid #e1e9f4;background:#fbfdff;border-radius:12px;line-height:1.5;color:#19334e;font-size:13.3px;outline:none;display:block}.task-input::placeholder{color:#a7b5c7}.task-input:focus,.field-input:focus,.budget-select:focus{border-color:#87b7fc;box-shadow:0 0 0 3px rgba(49,120,246,.08)}
+.btn{min-height:42px;border-radius:10px;padding:10px 16px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:700;font-size:12.5px;white-space:nowrap}.btn-primary{background:linear-gradient(180deg,#3987ff,#2471ef);color:white;box-shadow:0 5px 13px rgba(35,108,231,.16)}.btn-primary:hover:not(:disabled){background:linear-gradient(180deg,#287af8,#155fdd);transform:translateY(-1px)}.btn-outline{color:#56708e;background:white;border-color:#e0e9f5}.btn-outline:hover:not(:disabled){background:#f3f8ff;border-color:#bed6ff}.btn-danger{background:#fff1f1;color:#cd4e56;border-color:#fedcdb}.btn-danger:hover:not(:disabled){background:#ffe8e8}.btn-small{min-height:34px;padding:7px 11px;font-size:11.5px}.form-area .btn-primary{min-width:145px}
+.task-bottom{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}.start-wrap{display:flex;align-items:center;gap:10px;flex:1;max-width:520px;min-width:210px}.field-caption{color:#8495aa;font-size:11.5px;font-weight:650;white-space:nowrap}.field-input{width:100%;min-width:0;border:1px solid #e2eaf6;background:#fbfdff;border-radius:9px;padding:9px 11px;outline:none;color:#31445e;font-size:12px}.field-input::placeholder{color:#abb7c7}.budget-wrap{display:flex;align-items:center;gap:9px}.budget-select{border:1px solid #e0e9f5;background:white;color:#3e5471;border-radius:9px;padding:10px 12px;font-size:12px;font-weight:650;outline:none;cursor:pointer;max-width:178px}.task-helper{font-size:11px;color:#95a6bb;display:flex;align-items:center;gap:5px}
+.run-controls{display:flex;gap:8px}.run-controls .btn[hidden]{display:none}
+.attention-card{padding:18px 20px;margin-top:18px;border-color:#ffda96;background:linear-gradient(120deg,#fffdf6,#fff)}.attention-card .card-head{margin-bottom:8px}.attention-title{display:flex;align-items:center;gap:9px;color:#965d08}.attention-icon{height:30px;width:30px;border-radius:10px;background:#fff0d5;color:#b9761a;display:grid;place-items:center}.attention-summary{margin:0 0 11px;font-size:13px;line-height:1.6;color:#495b71}.pending-info{font-size:11.5px;color:#8d9caf;margin-bottom:10px}.option-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0}.reply{display:flex;gap:9px;align-items:center}.reply input{flex:1;min-width:190px}.handover-hint{font-size:11.5px;color:#8e7a56;line-height:1.5;margin-top:9px}.secure-field{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:9px}.secure-field input{flex:1;min-width:180px}.secure-feedback{font-size:11.5px;color:#927132;margin-top:7px}
+.workspace{display:grid;grid-template-columns:minmax(0,1.38fr) minmax(290px,.87fr);gap:18px;margin-top:18px;align-items:stretch}.browser-card,.activity-card{min-width:0;padding:20px;display:flex;flex-direction:column}.activity-card{min-height:455px}.section-title{font-size:14px;font-weight:760;margin:0;display:flex;align-items:center;gap:9px}.section-title .icon{color:#3178f6}.section-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:15px;flex-wrap:wrap}.small-indicator{font-size:11px;color:#86a0be;background:#f6f9ff;padding:6px 9px;border-radius:8px}
+.browser-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;margin-bottom:8px}.tab{flex:none;display:flex;align-items:center;gap:6px;max-width:225px;padding:9px 11px;border-radius:9px 9px 3px 3px;background:#f7f9fd;border:1px solid #e7edf6;color:#71849b;font-size:11.5px}.tab.active{background:#edf4ff;border-color:#cee0fe;color:#2f73df;font-weight:710}.tab-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tab-count{font-size:11px;color:#9aadbf}.browser-frame{border:1px solid #e5eaf4;border-radius:12px;overflow:hidden;background:#f9fbff;position:relative;min-height:315px;display:flex;flex-direction:column}.addressbar{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #e4eaf4;background:#f8fafd}.address-left{display:flex;align-items:center;gap:4px}.mini-icon-button{height:25px;width:25px;border:0;background:transparent;border-radius:7px;color:#7c8fa9;display:grid;place-items:center;position:relative}.mini-icon-button:hover{background:#e7eefb}.address-text{display:flex;align-items:center;gap:7px;color:#7186a3;font-size:11px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;flex:1;min-width:0;padding:7px 9px;background:#fff;border:1px solid #e9edf5;border-radius:7px}.address-text .icon{color:#7fa2d2}.address-url{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.browser-viewport{flex:1;min-height:260px;background:#fff;position:relative;display:flex;justify-content:center;align-items:center;overflow:hidden}.preview{width:100%;height:auto;max-height:550px;object-fit:contain;display:none;cursor:zoom-in}.browser-empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;padding:26px;color:#a1afc0;min-height:262px}.empty-icon{height:60px;width:60px;border-radius:18px;background:#f0f6ff;display:grid;place-items:center;color:#83b1f9}.browser-empty strong{color:#6d809b;font-size:12.5px}.browser-empty span{font-size:11px;line-height:1.6;max-width:250px}
+.browser-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px}.browser-caption{font-size:11px;color:#91a2b8;margin:11px 0 0;line-height:1.5}.browser-owner{font-size:11.5px;color:#617a9b;margin-top:10px;background:#f5f9ff;border:1px solid #e8effa;padding:10px 11px;border-radius:9px;line-height:1.45}.owner-head{font-weight:760;color:#4f7197;margin-bottom:3px}
+.activity-scroller{flex:1;min-height:275px;max-height:460px;overflow:auto;padding:2px 2px 6px 0;scrollbar-color:#dbe6f6 transparent;scrollbar-width:thin}.event{display:grid;grid-template-columns:15px minmax(0,1fr);gap:9px;padding:0 2px;position:relative}.event:not(:last-child):before{content:"";position:absolute;left:8px;top:18px;bottom:-4px;width:2px;background:#e2eaf6}.event-dot{height:10px;width:10px;border-radius:50%;margin-top:7px;background:#8eb6ff;border:2px solid #edf4ff;z-index:1}.event.success .event-dot{background:#2ab785;border-color:#d9f8eb}.event.warning .event-dot{background:#eea14b;border-color:#fff0d6}.event.danger .event-dot{background:#e97171;border-color:#ffeded}.event-content{padding:4px 0 17px;min-width:0}.event-time{color:#a4b3c5;font-size:10.5px;margin-bottom:5px;font-variant-numeric:tabular-nums}.event-text{font-size:12px;color:#50647f;line-height:1.55;overflow-wrap:anywhere}.event.success .event-text{color:#168768;font-weight:700}.event.warning .event-text{color:#a06b23}.event.danger .event-text{color:#c15d63}.activity-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:#a3b3c6;font-size:12px;text-align:center}
+.result-card{margin-top:18px;padding:18px 21px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;background:#fff}.result-icon{height:43px;width:43px;border-radius:13px;background:#eaf2ff;color:#4b8aff;display:grid;place-items:center}.result-icon .icon{height:22px;width:22px}.result-copy{min-width:0}.result-heading{font-size:14px;font-weight:780;line-height:1.4}.result-desc{margin-top:4px;font-size:12px;color:#8496ac;line-height:1.45;overflow-wrap:anywhere}.result-meta{color:#9aaabc;font-size:11px;margin-top:6px}.result-card.success{border-color:#d7f0e4;background:linear-gradient(95deg,#f2fff8 0%,#fff 92%)}.result-card.success .result-icon{background:#d8f8e8;color:#10a874}.result-card.success .result-heading{color:#177e5d}.result-card.warning{border-color:#f4e6c7;background:linear-gradient(95deg,#fffaf1 0%,#fff 92%)}.result-card.warning .result-icon{background:#fff0d2;color:#d4963d}.result-card.warning .result-heading{color:#966823}.result-card.danger{border-color:#f4dfdf;background:linear-gradient(95deg,#fff7f7 0%,#fff 92%)}.result-card.danger .result-icon{background:#ffe6e6;color:#cf6464}.result-card.danger .result-heading{color:#af4242}
+.toast{position:fixed;bottom:24px;right:25px;width:min(385px,calc(100vw - 32px));z-index:80;background:#fff;border:1px solid #f4d39b;box-shadow:0 17px 60px rgba(56,71,97,.21);border-radius:15px;padding:16px;display:flex;gap:12px;align-items:flex-start;animation:toast-enter .25s ease-out}.toast-icon{height:40px;width:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:#fff0d9;color:#c4862b}.toast-body{flex:1;min-width:0}.toast-title{font-size:13px;font-weight:770}.toast-desc{font-size:11.5px;line-height:1.45;margin:5px 0 10px;color:#7e8ea4}.toast-actions{display:flex;gap:7px;flex-wrap:wrap}@keyframes toast-enter{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}.toast-pulse{width:8px;height:8px;flex:none;background:#e7a447;border-radius:50%;box-shadow:0 0 0 4px #fff3df;animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(255,243,223,.2)}}
+.zoom-overlay{position:fixed;inset:0;background:rgba(17,32,51,.91);z-index:90;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}.zoom-overlay img{max-height:95vh;max-width:100%;object-fit:contain;border-radius:10px}.zoom-close{position:absolute;top:18px;right:18px;color:white;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:10px}
+.manual-panel{margin-top:14px;background:#f2f7ff;border:1px solid #d9e7ff;border-radius:12px;padding:14px}.manual-title{color:#326dc0;font-size:12.5px;font-weight:750}.manual-info{color:#7590b0;font-size:11.5px;line-height:1.5;margin:6px 0 11px}.manual-row{display:flex;gap:7px;flex-wrap:wrap}.manual-row input{flex:1;min-width:190px}.manual-status{margin-top:8px;color:#6483a8;font-size:11.5px}
+.footer-note{margin:18px 3px 0;font-size:11px;color:#a1afc2;text-align:center}
+@media (max-width:1150px){.workspace{grid-template-columns:minmax(0,1fr)}.activity-card{min-height:310px}.activity-scroller{max-height:300px}.main-content{padding:24px 22px 36px}}
+@media (max-width:750px){.topbar{padding:0 16px;height:70px}.brandname{font-size:17px}.brand-sub{font-size:10px}.local-badge{display:none}.shell{grid-template-columns:1fr}.sidebar{position:static;height:auto;min-height:0;padding:8px 11px;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);gap:5px}.nav-kicker,.sidebar-spacer,.agent-health{display:none}.nav-item{width:auto;min-width:max-content;padding:9px 12px;font-size:12px}.nav-item .nav-trail{display:none}.main-content{padding:20px 12px 30px}.page-heading h1{font-size:21px}.stage-indicator{display:none}.task-card,.browser-card,.activity-card{padding:16px}.form-area{flex-direction:column}.form-area .btn-primary{width:100%}.task-bottom{align-items:stretch}.start-wrap{max-width:none;width:100%}.budget-wrap{justify-content:space-between;width:100%}.task-helper{display:none}.result-card{grid-template-columns:auto 1fr}.result-card>button{grid-column:1/-1;justify-self:stretch}.toast{bottom:12px;right:12px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+</style>
+<style id="copilot-answer-style">
+#answerCard[hidden],#answerSourceLine[hidden]{
+  display:none!important;
+}
+#answerCard{
+  margin-top:16px;
+}
+.copilot-answer-text{
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  font-family:inherit;
+  font-size:14px;
+  line-height:1.75;
+  padding:12px 0;
+  user-select:text;
+}
+.copilot-answer-source{
+  margin-top:8px;
+  padding-top:12px;
+  border-top:1px solid rgba(125,145,165,.22);
+  font-size:13px;
+  overflow-wrap:anywhere;
+}
+.copilot-answer-source a{
+  color:#2878c8;
+  text-decoration:underline;
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7L19 17Z"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></symbol>
+<symbol id="i-browser" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/><path d="M7 6.5h.01M10 6.5h.01"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M10.5 2.7h3l.6 2.3 1.9.8 2.1-1.2 2.1 2.1L19 8.8l.8 1.9 2.3.6v3l-2.3.6-.8 1.9 1.2 2.1-2.1 2.1-2.1-1.2-1.9.8-.6 2.3h-3l-.6-2.3-1.9-.8-2.1 1.2-2.1-2.1 1.2-2.1-.8-1.9-2.3-.6v-3l2.3-.6.8-1.9-1.2-2.1 2.1-2.1 2.1 1.2 1.9-.8.6-2.3Z" transform="translate(0 -1) scale(.95)"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="3"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.8 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/><path d="M12 9v5m0 3h.01"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></symbol>
+<symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6M8 12h12"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6M16 12H4"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v6h-6M4 18v-6h6"/><path d="M5.5 9a7 7 0 0 1 12-2L20 12M4 12l2.5 5a7 7 0 0 0 12-2"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="15" rx="2"/><path d="M8 22h8m-4-4v4"/></symbol>
+<symbol id="i-external" viewBox="0 0 24 24"><path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M13 3h8v8M21 3l-10 10"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+</svg>
+<header class="topbar">
+ <a class="brand" href="#home" aria-label="Website CoPilot home"><span class="brandmark"><svg class="icon"><use href="#i-spark"></use></svg></span><span><span class="brandname">Website CoPilot</span><span class="brand-sub" style="display:block">Autonomous browser agent · Ollama + Playwright</span></span></a>
+ <div class="top-right"><span class="local-badge"><span class="online-dot"></span><span id="connectionLabel">Local workspace</span></span><button type="button" class="icon-button placeholder" aria-disabled="true" title="Not Implemented yet" aria-label="Theme toggle — Not Implemented yet"><svg class="icon"><use href="#i-sun"></use></svg></button><span class="avatar" aria-label="CoPilot">C</span></div>
+</header>
+<div class="shell" id="home">
+ <aside class="sidebar" aria-label="Navigation"><div class="nav-kicker">Workspace</div>
+  <button type="button" class="nav-item active" data-scroll="home"><svg class="icon"><use href="#i-home"></use></svg> Home</button>
+  <button type="button" class="nav-item" data-scroll="taskCard"><svg class="icon"><use href="#i-plus"></use></svg> New Task</button>
+  <button type="button" class="nav-item" data-scroll="browserCard"><svg class="icon"><use href="#i-browser"></use></svg> Browser</button>
+  <button type="button" class="nav-item placeholder" aria-disabled="true" title="Not Implemented yet"><svg class="icon"><use href="#i-clock"></use></svg> History <span class="nav-trail">Soon</span></button>
+  <button type="button" class="nav-item placeholder" aria-disabled="true" title="Not Implemented yet"><svg class="icon"><use href="#i-settings"></use></svg> Settings <span class="nav-trail">Soon</span></button>
+  <div class="sidebar-spacer"></div><div class="agent-health"><span class="health-dot" id="healthDot"></span><span><div class="health-title" id="healthTitle">CoPilot ready</div><div class="health-caption" id="healthCaption">Local agent dashboard</div></span></div>
+ </aside>
+ <main class="main-content">
+  <div class="page-heading"><div><h1>Browser workspace <span style="font-size:17px;color:#80a9ef">✦</span></h1><p>Give an instruction, and let CoPilot navigate the details.</p></div><div class="stage-indicator"><span class="online-dot" id="stageDot"></span><span id="status">Ready</span></div></div>
+  <section class="card task-card" id="taskCard"><div class="card-head"><h2>What should CoPilot do?</h2><span class="micro-note">Natural language tasks</span></div>
+   <form id="taskForm"><div class="form-area"><div class="instruction-wrap"><textarea id="instruction" class="task-input" required maxlength="10000" placeholder="e.g. Open a website, fill out a form, compare products, or find information..."></textarea></div><div class="run-controls"><button id="runStopToggle" type="submit" class="btn btn-primary"><svg class="icon sm"><use href="#i-play"></use></svg><span id="runButtonLabel">Run CoPilot</span></button><button id="pauseResumeToggle" type="button" class="btn btn-outline" hidden><svg class="icon sm"><use href="#i-pause"></use></svg><span id="pauseButtonLabel">Pause</span></button></div></div>
+    <div class="task-bottom"><div class="start-wrap"><label class="field-caption" for="startUrl">Starting URL</label><input id="startUrl" class="field-input" type="url" placeholder="https://example.com (optional)" autocomplete="off"></div><div class="budget-wrap"><label class="field-caption" for="maxSteps">Action budget</label><select id="maxSteps" class="budget-select"><option value="6">Quick · 6 actions</option><option value="12" selected>Standard · 12 actions</option><option value="30">Extended · 30 actions</option></select></div><span class="task-helper"><svg class="icon sm"><use href="#i-spark"></use></svg> One action at a time</span></div>
+   </form>
+  </section>
+  <section class="card attention-card" id="interaction" hidden aria-labelledby="interactionTitle"><div class="card-head"><h2 id="interactionTitle" class="attention-title"><span class="attention-icon"><svg class="icon"><use href="#i-alert"></use></svg></span> CoPilot needs your input</h2><span class="micro-note">Action required to continue</span></div><div id="actionInfo" class="pending-info"></div><p id="question" class="attention-summary"></p><div id="options" class="option-row"></div><form id="replyForm" class="reply"><input id="replyText" class="field-input" placeholder="Or reply in your own words…" maxlength="600"><button type="submit" class="btn btn-primary">Send reply</button></form><div class="handover-hint" id="handoverHint"></div></section>
+  <div class="workspace">
+   <section class="card browser-card" id="browserCard"><div class="section-head"><h2 class="section-title"><svg class="icon"><use href="#i-browser"></use></svg> Live browser</h2><span class="small-indicator" id="tabStatus">Awaiting a task</span></div>
+    <div id="browserTabPanel" class="browser-tabs" role="group" aria-label="Open browser tabs"></div>
+    <div class="browser-frame"><div class="addressbar"><div class="address-left"><button type="button" class="mini-icon-button placeholder" title="Not Implemented yet" aria-disabled="true" aria-label="Browser back — Not Implemented yet"><svg class="icon sm"><use href="#i-arrow-left"></use></svg></button><button type="button" class="mini-icon-button placeholder" title="Not Implemented yet" aria-disabled="true" aria-label="Browser forward — Not Implemented yet"><svg class="icon sm"><use href="#i-arrow-right"></use></svg></button><button type="button" class="mini-icon-button placeholder" title="Not Implemented yet" aria-disabled="true" aria-label="Refresh page — Not Implemented yet"><svg class="icon sm"><use href="#i-refresh"></use></svg></button></div><div class="address-text"><svg class="icon sm"><use href="#i-lock"></use></svg><span id="currentUrl" class="address-url">No browser page opened</span></div></div>
+     <div class="browser-viewport" id="browserViewport"><div class="browser-empty" id="browserEmpty"><div class="empty-icon"><svg class="icon" style="width:28px;height:28px"><use href="#i-browser"></use></svg></div><strong>Browser preview appears here</strong><span>Start a task to watch CoPilot work. The preview is read-only unless you pause the agent.</span></div><img id="preview" class="preview" alt="Current browser screenshot"></div></div>
+    <div class="browser-actions"><button id="browserVisibilityBtn" type="button" class="btn btn-outline btn-small" hidden><svg class="icon sm"><use href="#i-monitor"></use></svg><span id="browserVisibilityLabel">Show real browser</span></button><button id="zoomBtn" type="button" class="btn btn-outline btn-small" hidden><svg class="icon sm"><use href="#i-expand"></use></svg> Expand preview</button><span id="browserVisibilityNote" class="micro-note"></span></div>
+    <div id="browserControlOwnership" class="browser-owner" role="status"><div class="owner-head" id="ownerTitle">Ready for a task</div><div id="ownerDescription">CoPilot will open and manage a browser when you start.</div></div>
+    <div id="copilotManualPanel" class="manual-panel" hidden><div class="manual-title">Manual browser control · Paused</div><p class="manual-info">Click or scroll the preview to interact. For passwords, OTPs, or CAPTCHA, open the real Chromium window.</p><div class="manual-row"><input id="manualInput" class="field-input" placeholder="Type ordinary text into focused field" autocomplete="off"><button id="manualTypeBtn" class="btn btn-outline btn-small" type="button">Type</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Tab">Tab</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Enter">Enter</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Escape">Esc</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Backspace">⌫</button></div><div id="manualStatus" class="manual-status">Manual controls are available at a safe pause point.</div></div>
+    <p class="browser-caption">Read-only while CoPilot runs. Pause for manual actions or open Chromium for sensitive steps.</p>
+   </section>
+   <section class="card activity-card" id="activityCard"><div class="section-head"><h2 class="section-title"><svg class="icon"><use href="#i-clock"></use></svg> Agent activity</h2><span class="small-indicator" id="activityCounter">0 events</span></div><div id="activity" class="activity-scroller" aria-live="polite"><div class="activity-empty"><svg class="icon lg"><use href="#i-clock"></use></svg><span>Actions will appear here as CoPilot works.</span></div></div></section>
+  </div>
+  <section id="resultCard" class="card result-card"><div class="result-icon"><svg id="resultIcon" class="icon"><use href="#i-spark"></use></svg></div><div class="result-copy"><div class="result-heading" id="resultHeading">Ready when you are</div><div class="result-desc" id="resultDescription">Describe a task above to begin autonomous browsing.</div><div class="result-meta" id="resultMeta"></div></div><button id="resultDetailsBtn" type="button" class="btn btn-outline btn-small" hidden>View details <svg class="icon sm"><use href="#i-arrow-right"></use></svg></button></section>
+  <section id="answerCard" class="card" hidden aria-label="CoPilot answer">
+  <div class="section-head">
+    <h2 class="section-title">CoPilot answer</h2>
+  </div>
+  <div id="answerText" class="copilot-answer-text" aria-live="polite"></div>
+  <div id="answerSourceLine" class="copilot-answer-source" hidden>
+    Source: <a id="answerSource" target="_blank" rel="noopener noreferrer"></a>
+  </div>
+</section>
+
+<section id="downloadCard" class="card" hidden
+         aria-label="Verified PDF download">
+  <div class="section-head">
+    <h2 class="section-title">
+      Verified PDF
+    </h2>
+  </div>
+
+  <div class="copilot-download-information">
+    <strong id="downloadFilename"></strong>
+    <p id="downloadMeta" class="browser-caption"></p>
+  </div>
+
+  <a id="downloadLink"
+     class="btn btn-primary"
+     href="#"
+     rel="noreferrer"
+     download>
+    Download PDF
+  </a>
+
+  <p class="browser-caption">
+    This temporary download link expires automatically.
+  </p>
+</section>
+
+<p class="footer-note">Website CoPilot · Local automation workspace · Browser actions remain subject to confirmation and safety checks</p>
+ </main>
+</div>
+<div id="attentionToast" class="toast" role="alert" aria-live="assertive" hidden><div class="toast-icon"><svg class="icon lg"><use href="#i-alert"></use></svg></div><div class="toast-body"><div class="toast-title" id="toastTitle">CoPilot needs your attention</div><p class="toast-desc" id="toastDescription">Your input is required to continue.</p><div class="toast-actions"><button id="toastReview" type="button" class="btn btn-primary btn-small">Review request <svg class="icon sm"><use href="#i-arrow-right"></use></svg></button></div></div><span class="toast-pulse" aria-hidden="true"></span></div>
+<div id="zoomOverlay" class="zoom-overlay" hidden role="dialog" aria-modal="true" aria-label="Expanded browser screenshot"><button id="zoomClose" type="button" class="zoom-close" aria-label="Close expanded preview">Close ✕</button><img id="zoomImage" alt="Expanded browser screenshot"></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const icon=(name,cls='icon sm')=>`<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+let currentState={phase:'idle',pending:null};
+let currentTabs={tabs:[],activeKnown:false};
+let activeDialog=null;
+let busy=false;
+let manualBusy=false;
+let screenshotBusy=false;
+let previousScreenshotUrl=null;
+let lastScreenshotLoadedAt=0;
+let lastActivitySignature='';
+let browserVisibleBusy=false;
+let browserTabsBusy=false;
+let manualActiveTabId=null;
+const inactive=new Set(['idle','finished','error','cancelled']);
+const phases={idle:'Ready',starting:'Starting',running:'Running',pausing:'Pausing',paused:'Paused',stopping:'Stopping',finished:'Finished',error:'Error',cancelled:'Stopped',approval_request:'Needs approval',approval_confirmation:'Confirm action',human_handover:'Needs your input'};
+const successStatuses=new Set(['verified_complete','persisted_complete','answer_ready','download_ready']);
+function isRunningPhase(phase){return !inactive.has(phase)}
+function showError(message){$('resultCard').className='card result-card danger';$('resultHeading').textContent='Action could not be completed';$('resultDescription').textContent=String(message||'Unknown error');$('resultMeta').textContent='';$('resultCard').scrollIntoView({behavior:'smooth',block:'nearest'})}
+async function post(path,data={}){const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw Error(result.error||'Request failed.');return result}
+function updateControls(){const p=currentState.phase||'idle';const active=isRunningPhase(p);const stopping=p==='stopping';const run=$('runStopToggle');run.disabled=busy||stopping;run.type=active?'button':'submit';$('runButtonLabel').textContent=stopping?'Stopping…':active?'Stop Agent':'Run CoPilot';run.classList.toggle('btn-danger',active);run.classList.toggle('btn-primary',!active);run.querySelector('svg use').setAttribute('href','#i-'+(active?'stop':'play'));const pause=$('pauseResumeToggle');pause.hidden=!(p==='running'||p==='paused');pause.disabled=busy;pause.querySelector('svg use').setAttribute('href','#i-'+(p==='paused'?'play':'pause'));$('pauseButtonLabel').textContent=p==='paused'?'Resume':'Pause';$('status').textContent=phases[p]||p;const dot=$('stageDot');dot.style.background=p==='error'?'#d95a5a':p==='running'?'#3178f6':p==='paused'||currentState.pending?'#e6a044':'#24b47e';$('healthTitle').textContent=currentState.pending?'Needs your input':p==='running'?'Agent working':p==='paused'?'Agent paused':p==='error'?'Agent error':'CoPilot ready';$('healthCaption').textContent=p==='running'?'Executing browser task':p==='paused'?'Manual control available':currentState.pending?'Review the request':'Local agent dashboard';$('healthDot').style.background=currentState.pending?'#e6a044':p==='error'?'#d95a5a':'#24b47e'}
+async function startTask(){if(busy||isRunningPhase(currentState.phase))return;const instruction=$('instruction').value.trim();if(!instruction){$('instruction').focus();return}busy=true;updateControls();try{await post('/api/start',{instruction,startUrl:$('startUrl').value.trim(),maxSteps:Number($('maxSteps').value)});$('resultDetailsBtn').hidden=true;}catch(error){showError(error.message)}finally{busy=false;updateControls()}}
+async function stopTask(){if(busy||!isRunningPhase(currentState.phase))return;busy=true;updateControls();try{await post('/api/stop')}catch(error){showError(error.message)}finally{busy=false;updateControls()}}
+$('taskForm').addEventListener('submit',event=>{event.preventDefault();void startTask()});
+$('runStopToggle').addEventListener('click',event=>{if(isRunningPhase(currentState.phase)){event.preventDefault();void stopTask()}});
+$('pauseResumeToggle').addEventListener('click',async()=>{if(busy)return;const action=currentState.phase==='running'?'pause':currentState.phase==='paused'?'resume':null;if(!action)return;busy=true;updateControls();try{await post('/api/'+action)}catch(error){showError(error.message)}finally{busy=false;updateControls()}});
+for(const nav of document.querySelectorAll('[data-scroll]')){nav.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el===nav));const target=$(nav.dataset.scroll);if(target)target.scrollIntoView({behavior:'smooth',block:'start'});if(nav.dataset.scroll==='taskCard')$('instruction').focus({preventScroll:true})})}
+for(const nav of document.querySelectorAll('.placeholder')){nav.addEventListener('click',event=>{event.preventDefault()})}
+function dialogTitle(dialog){if(dialog.kind==='human_handover'){const type=String(dialog.field?.type||'').toLowerCase();const label=String(dialog.field?.label||'').toLowerCase();if(type==='password'||label.includes('password'))return 'Password needed';if(label.includes('otp')||label.includes('verification')||label.includes('code'))return 'Verification code needed';if(label.includes('captcha'))return 'CAPTCHA needs your attention';return 'Manual step required'}if(dialog.kind==='approval_confirmation')return 'Please confirm this action';return 'Approval needed'}
+function showToast(dialog){$('attentionToast').hidden=false;$('toastTitle').textContent=dialogTitle(dialog);$('toastDescription').textContent=dialog.question||'CoPilot needs your input to continue.';$('toastReview').onclick=()=>{$('interaction').scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>{const field=$('interaction').querySelector('input:not([hidden])');field?.focus({preventScroll:true})},350)}}
+function clearPending(){activeDialog=null;$('interaction').hidden=true;$('attentionToast').hidden=true}
+async function reply(data){if(!activeDialog)return;const dialog=activeDialog;try{await post('/api/reply',{id:dialog.id,...data});if(activeDialog?.id===dialog.id)clearPending()}catch(error){showError(error.message)}}
+function actionButton(label,onClick,{secondary=false,danger=false}={}){const button=document.createElement('button');button.type='button';button.className='btn '+(danger?'btn-danger':secondary?'btn-outline':'btn-primary')+' btn-small';button.textContent=label;button.addEventListener('click',onClick);return button}
+function showDialog(dialog){activeDialog=dialog;$('interaction').hidden=false;$('question').textContent=dialog.question||'Your input is needed to continue.';const pending=dialog.pendingAction;$('actionInfo').textContent=pending?`${pending.website||'Website'} · ${pending.operation||'Action'} · ${pending.targetLabel||'Target'}`:dialog.field?`Sensitive field: ${dialog.field.label||'Unknown'}`:'';const options=$('options');options.replaceChildren();const human=dialog.kind==='human_handover';$('replyForm').hidden=human;$('handoverHint').textContent=human?'Keep passwords and verification codes out of the normal task prompt. Open the real browser for manual entry.':'';
+  if(human&&dialog.field?.secureEntrySupported===true){const form=document.createElement('form');form.className='secure-field';const input=document.createElement('input');input.type='password';input.className='field-input';input.autocomplete='off';input.spellcheck=false;input.placeholder='Password — entered privately';input.setAttribute('aria-label','Secure password');const submit=document.createElement('button');submit.type='submit';submit.className='btn btn-primary btn-small';submit.textContent='Fill securely & resume';const status=document.createElement('div');status.className='secure-feedback';status.style.width='100%';form.append(input,submit,status);form.addEventListener('submit',async event=>{event.preventDefault();if(!input.value||submit.disabled)return;let secret=input.value;input.value='';submit.disabled=true;status.textContent='Filling the website field securely…';try{await post('/api/secure-password',{id:dialog.id,secret});secret='';if(activeDialog?.id===dialog.id)clearPending()}catch(error){secret='';status.textContent=error.message;submit.disabled=false}});options.append(form)}
+  if(human){const manual=actionButton('Open real browser',async()=>{manual.disabled=true;try{await post('/api/browser-visibility',{visible:true});$('handoverHint').textContent='Finish the sensitive step in Chromium, then select “I’ve completed it — resume”.';if(dialog.field?.secureEntrySupported===true && !options.querySelector('[data-manual-done]')){const done=actionButton('I’ve completed it — resume',()=>void reply({optionId:'done'}));done.dataset.manualDone='true';options.append(done)}if(currentState)currentState.browserVisible=true;updateVisibility();}catch(error){$('handoverHint').textContent=error.message}finally{manual.disabled=false}},{secondary:true});options.append(manual)}
+  for(const option of dialog.options||[]){if(human&&dialog.field?.secureEntrySupported===true&&option.id==='done')continue;const danger=['deny','cancel'].includes(option.id);const secondary=['deny','cancel','manual','clarify'].includes(option.id);options.append(actionButton(option.label,()=>void reply({optionId:option.id}),{secondary,danger}))}
+  showToast(dialog);$('interaction').scrollIntoView({behavior:'smooth',block:'nearest'})
+}
+$('replyForm').addEventListener('submit',event=>{event.preventDefault();const text=$('replyText').value.trim();if(!text)return;$('replyText').value='';void reply({text})});
+function renderActivity(items=[]){const signature=items.length+':'+(items.at(-1)?.at||'')+':'+(items.at(-1)?.text||'');if(signature===lastActivitySignature)return;lastActivitySignature=signature;const area=$('activity');const stick=area.scrollHeight-area.scrollTop-area.clientHeight<55;area.replaceChildren();$('activityCounter').textContent=items.length+' event'+(items.length===1?'':'s');if(!items.length){const empty=document.createElement('div');empty.className='activity-empty';empty.innerHTML=icon('clock','icon lg')+'<span>Actions will appear here as CoPilot works.</span>';area.append(empty);return}for(const item of items){const text=String(item.text||'');const lower=text.toLowerCase();const tone=/completed|verified|successful|finished: verified|finished: persisted/.test(lower)?'success':/error|failed|stagnation|rejected|cancel/.test(lower)?'danger':/approval|handover|manual interaction|required|waiting|paused/.test(lower)?'warning':'';const row=document.createElement('div');row.className='event '+tone;const dot=document.createElement('span');dot.className='event-dot';const body=document.createElement('div');body.className='event-content';const time=document.createElement('div');time.className='event-time';time.textContent=item.at||'';const description=document.createElement('div');description.className='event-text';description.textContent=text;body.append(time,description);row.append(dot,body);area.append(row)}if(stick)area.scrollTop=area.scrollHeight}
+function resultInfo(state){const phase=state.phase||'idle',status=state.result?.status||'';if(state.error||phase==='error')return{tone:'danger',title:'Agent stopped with an error',detail:state.error||state.result?.reason||'Review the task activity for the error.',icon:'alert'};if(phase==='cancelled'||status==='cancelled')return{tone:'warning',title:'Task stopped',detail:'The task was cancelled before verification.',icon:'stop'};if(phase==='finished'){if(status==='answer_ready')return{tone:'success',title:'Answer ready',detail:'CoPilot generated an answer from the webpage.',icon:'check'};if(successStatuses.has(status))return{tone:'success',title:'Task completed successfully',detail:'The requested outcome was verified.',icon:'check'};if(status==='action_outcome_unverified')return{tone:'warning',title:'Task outcome could not be verified',detail:'An action occurred, but the final result could not be confirmed.',icon:'alert'};if(status==='step_limit_reached')return{tone:'warning',title:'Task stopped · Action limit reached',detail:'The action budget was exhausted before completion.',icon:'clock'};if(status==='needs_clarification')return{tone:'warning',title:'Task needs clarification',detail:state.result?.reason||'CoPilot could not interpret this task.',icon:'alert'};return{tone:'danger',title:'Task could not be completed',detail:state.result?.reason||status||'CoPilot stopped without verifying success.',icon:'alert'}}if(state.pending)return{tone:'warning',title:'Your input is needed',detail:'Respond to the highlighted request so CoPilot can continue.',icon:'alert'};if(phase==='paused')return{tone:'',title:'Agent paused',detail:'You can now control Chromium manually or resume automation.',icon:'pause'};if(phase==='running'||phase==='starting'||phase==='pausing'||phase==='stopping')return{tone:'',title:phase==='starting'?'Starting CoPilot…':phase==='stopping'?'Stopping the agent…':phase==='pausing'?'Pausing at a safe checkpoint…':'CoPilot is working',detail:'Agent activity and live browser progress appear above.',icon:'spark'};return{tone:'',title:'Ready when you are',detail:'Describe a task above to begin autonomous browsing.',icon:'spark'}}
+function renderResult(state){const info=resultInfo(state);$('resultCard').className='card result-card '+info.tone;$('resultHeading').textContent=info.title;$('resultDescription').textContent=info.detail;$('resultIcon').querySelector('use').setAttribute('href','#i-'+info.icon);const status=state.result?.status||'';const records=state.result?.history?.filter(item=>item.executionCompleted).length??0;$('resultMeta').textContent=status?`Status: ${status} · Executed actions: ${records}`:'';$('resultDetailsBtn').hidden=!state.result&&!state.error;}
+function renderAnswer(state){
+  const card=$('answerCard');
+  const body=$('answerText');
+  const link=$('answerSource');
+  const sourceLine=$('answerSourceLine');
+
+  const result=state.phase==='finished'&&
+    state.result?.status==='answer_ready'
+    ?state.result:null;
+
+  if(!result||typeof result.answer!=='string'||
+     !result.answer.trim()){
+    card.hidden=true;
+    body.textContent='';
+    link.removeAttribute('href');
+    link.textContent='';
+    sourceLine.hidden=true;
+    return;
+  }
+
+  // Model output is text, never executable HTML.
+  body.textContent=result.answer;
+
+  let safeUrl=null;
+  try{
+    const url=new URL(String(result.sourceUrl||''));
+    if((url.protocol==='https:'||url.protocol==='http:')&&
+       !url.username&&!url.password){
+      safeUrl=url;
+    }
+  }catch{}
+
+  if(safeUrl){
+    link.href=safeUrl.href;
+    link.textContent=
+      String(result.sourceTitle||'').trim()||
+      safeUrl.hostname;
+    sourceLine.hidden=false;
+  }else{
+    link.removeAttribute('href');
+    link.textContent='';
+    sourceLine.hidden=true;
+  }
+
+  card.hidden=false;
+}
+
+function renderDownload(state){
+  const card=$('downloadCard');
+  const filename=$('downloadFilename');
+  const meta=$('downloadMeta');
+  const link=$('downloadLink');
+
+  const file=state.phase==='finished' &&
+    state.result?.status==='download_ready'
+      ?state.result.download:null;
+
+  const validFilename=
+    typeof file?.filename==='string' &&
+    file.filename.length<=120 &&
+    !file.filename.startsWith('.') &&
+    /^[^\/\\\u0000-\u001f\u007f<>:"|?*]+\.pdf$/i
+      .test(file.filename);
+
+  const valid=
+    file?.verified===true &&
+    validFilename &&
+    Number.isSafeInteger(file.bytes) &&
+    file.bytes>=100 &&
+    file.bytes<=15*1024*1024 &&
+    /^[a-f0-9]{64}$/i.test(String(file.sha256??'')) &&
+    /^\/api\/download\/[a-f0-9]{48}$/
+      .test(String(file.downloadUrl??'')) &&
+    Number.isSafeInteger(file.expiresAt) &&
+    file.expiresAt>Date.now();
+
+  if(!valid){
+    card.hidden=true;
+    filename.textContent='';
+    meta.textContent='';
+    link.removeAttribute('href');
+    link.removeAttribute('download');
+    return;
+  }
+
+  filename.textContent=file.filename;
+
+  const size=(file.bytes/1024).toFixed(1)+' KB';
+
+  const expiry=new Date(file.expiresAt)
+    .toLocaleTimeString([],{
+      hour:'2-digit',
+      minute:'2-digit'
+    });
+
+  meta.textContent=size+' · Verified PDF · Expires at '+expiry;
+
+  // Only relative, validated delivery routes can be opened.
+  link.setAttribute('href',file.downloadUrl);
+  link.setAttribute('download',file.filename);
+
+  card.hidden=false;
+}
+
+function renderOwnership(state){const phase=state.phase||'idle';let title='Ready for a task',detail='CoPilot will open and manage Chromium after you start.';if(state.pending){title='Attention required';detail='CoPilot is waiting for you to approve or complete a manual step.'}else if(phase==='running'){title='CoPilot is controlling the browser';detail='Pause at a safe checkpoint before interacting manually.'}else if(phase==='paused'){title='Manual control available';detail='Use the preview controls below or open the real Chromium window.'}else if(phase==='starting'){title='Preparing Chromium';detail='The browser workspace is starting.'}else if(phase==='finished'){title='Agent run ended';detail=state.result?.status==='answer_ready'?'The requested explanation is ready below.':successStatuses.has(state.result?.status)?'The task outcome was verified.':'See the task result below for the completion status.'}else if(phase==='error'){title='Browser workflow interrupted';detail='Review the error under Task result.'}else if(phase==='cancelled'){title='Agent stopped';detail='The automated run was cancelled.'}$('ownerTitle').textContent=title;$('ownerDescription').textContent=detail}
+function renderState(state){currentState=state;updateControls();renderActivity(state.activity||[]);renderResult(state);renderAnswer(state);renderDownload(state);renderOwnership(state);updateVisibility();$('copilotManualPanel').hidden=state.phase!=='paused';$('preview').style.cursor=state.phase==='paused'?'crosshair':'zoom-in';if(state.pending){if(activeDialog?.id!==state.pending.id)showDialog(state.pending);else showToast(state.pending)}else if(activeDialog)clearPending();if(state.url&&!$('currentUrl').dataset.hasTabs)$('currentUrl').textContent=safeUrl(state.url)}
+function safeUrl(value){try{const u=new URL(value);return u.origin+u.pathname}catch{return value||'No browser page opened'}}
+function renderTabs(data){currentTabs=data;const tabs=Array.isArray(data.tabs)?data.tabs:[];const wrapper=$('browserTabPanel');wrapper.replaceChildren();$('tabStatus').textContent=tabs.length?`${tabs.length} tab${tabs.length===1?'':'s'}`:'Awaiting a task';$('currentUrl').dataset.hasTabs=tabs.length?'yes':'';if(!tabs.length){$('currentUrl').textContent=currentState.url?safeUrl(currentState.url):'No browser page opened';return}for(const tab of tabs){const chip=document.createElement('div');chip.className='tab'+(tab.active?' active':'');chip.title=(tab.title||'Tab')+' · '+(tab.url||'');const dot=document.createElement('span');dot.textContent=tab.active?'●':'◦';dot.style.color=tab.active?'#3983f1':'#a7b7c9';const title=document.createElement('span');title.className='tab-title';title.textContent=(tab.index||'')+'. '+(tab.title||'Untitled');chip.append(dot,title);wrapper.append(chip)}const active=tabs.find(tab=>tab.active);$('currentUrl').textContent=active?.url || (tabs.length===1 ? (tabs[0].url||'Browser tab open') : (currentState.url ? safeUrl(currentState.url) : 'Agent tab not identified'));manualActiveTabId=active?.id||null}
+async function refreshTabs(){if(browserTabsBusy)return;browserTabsBusy=true;try{const response=await fetch('/api/browser-tabs',{cache:'no-store'});if(response.ok)renderTabs(await response.json())}catch{/* Browser tab polling can fail transiently. */}finally{browserTabsBusy=false}}
+function updateVisibility(){const state=currentState;const active=state.phase!=='idle'&&state.phase!=='starting'&&state.phase!=='cancelled'&&state.phase!=='error';$('browserVisibilityBtn').hidden=!active;$('browserVisibilityBtn').disabled=browserVisibleBusy||state.browserControlAvailable===false;$('browserVisibilityLabel').textContent=state.browserVisible?'Hide real browser':'Show real browser';$('browserVisibilityNote').textContent=state.browserControlAvailable===false?'Chromium window control is unavailable on this setup.':''}
+$('browserVisibilityBtn').addEventListener('click',async()=>{if(browserVisibleBusy)return;browserVisibleBusy=true;updateVisibility();try{await post('/api/browser-visibility',{visible:!currentState.browserVisible})}catch(error){$('browserVisibilityNote').textContent=error.message}finally{browserVisibleBusy=false;updateVisibility()}});
+async function refreshScreenshot(){if(screenshotBusy)return;screenshotBusy=true;try{const response=await fetch('/api/screenshot?t='+Date.now(),{cache:'no-store'});if(!response.ok){$('preview').dataset.snapshotId='';if(!currentState.url&&!currentTabs.tabs?.length){$('preview').style.display='none';$('browserEmpty').hidden=false;$('zoomBtn').hidden=true}return}const ticket=response.headers.get('X-CoPilot-Snapshot')||'';const url=URL.createObjectURL(await response.blob());const img=$('preview');img.dataset.snapshotId='';img.src=url;try{await img.decode();if(img.src===url){img.dataset.snapshotId=ticket;img.style.display='block';$('browserEmpty').hidden=true;$('zoomBtn').hidden=false;lastScreenshotLoadedAt=performance.now()}if(previousScreenshotUrl)URL.revokeObjectURL(previousScreenshotUrl);previousScreenshotUrl=url}catch{URL.revokeObjectURL(url)}}catch{/* Keep last good screenshot. */}finally{screenshotBusy=false}}
+function openZoom(){const img=$('preview');if(currentState.phase==='paused'||!img.naturalWidth)return;$('zoomImage').src=img.currentSrc||img.src;$('zoomOverlay').hidden=false}
+function closeZoom(){$('zoomOverlay').hidden=true}
+$('zoomBtn').addEventListener('click',openZoom);$('zoomClose').addEventListener('click',closeZoom);$('zoomOverlay').addEventListener('click',event=>{if(event.target===$('zoomOverlay'))closeZoom()});document.addEventListener('keydown',event=>{if(event.key==='Escape')closeZoom()});
+async function sendManual(action,extra={}){if(currentState.phase!=='paused'||!manualActiveTabId||manualBusy)return false;manualBusy=true;$('manualStatus').textContent='Applying manual action…';try{await post('/api/manual-action',{action,tabId:manualActiveTabId,...extra});$('manualStatus').textContent='Manual action completed.';return true}catch(error){$('manualStatus').textContent=error.message;return false}finally{manualBusy=false}}
+$('manualTypeBtn').addEventListener('click',async()=>{const input=$('manualInput');if(!input.value)return;const value=input.value;if(await sendManual('type',{text:value}))input.value=''});
+$('manualInput').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('manualTypeBtn').click()}});
+for(const button of document.querySelectorAll('[data-manual-key]'))button.addEventListener('click',()=>void sendManual('key',{key:button.dataset.manualKey}));
+function screenshotPoint(event){const el=$('preview'),rect=el.getBoundingClientRect();if(!el.naturalWidth||!el.naturalHeight||!rect.width||!rect.height)return null;const ratio=el.naturalWidth/el.naturalHeight;const width=Math.min(rect.width,rect.height*ratio),height=Math.min(rect.height,rect.width/ratio);const left=rect.left+(rect.width-width)/2,top=rect.top+(rect.height-height)/2;const xRatio=(event.clientX-left)/width,yRatio=(event.clientY-top)/height;if(xRatio<0||xRatio>1||yRatio<0||yRatio>1)return null;return{xRatio,yRatio}}
+$('preview').addEventListener('click',event=>{if(currentState.phase!=='paused'){openZoom();return}event.preventDefault();const age=performance.now()-lastScreenshotLoadedAt;if(!lastScreenshotLoadedAt||age>3000){$('manualStatus').textContent='Screenshot is outdated. Waiting for a fresh image.';return}const point=screenshotPoint(event);if(!point)return;const snapshotId=$('preview').dataset.snapshotId;if(!snapshotId){$('manualStatus').textContent='Waiting for a verified browser screenshot.';return}void sendManual('click',{...point,snapshotId})});
+$('preview').addEventListener('wheel',event=>{if(currentState.phase!=='paused')return;event.preventDefault();void sendManual('scroll',{deltaX:event.deltaX,deltaY:event.deltaY})},{passive:false});
+$('resultDetailsBtn').addEventListener('click',()=>{$('activityCard').scrollIntoView({behavior:'smooth',block:'start'})});
+const stream=new EventSource('/api/events');stream.onmessage=event=>{try{renderState(JSON.parse(event.data));$('connectionLabel').textContent='Local workspace'}catch(error){console.error('Invalid agent state',error)}};stream.onerror=()=>{$('connectionLabel').textContent='Reconnecting…'};
+fetch('/api/state',{cache:'no-store'}).then(response=>response.json()).then(renderState).catch(()=>{});
+void refreshTabs();void refreshScreenshot();setInterval(refreshTabs,2500);setInterval(refreshScreenshot,1800);
+</script>
+</body>
+</html>

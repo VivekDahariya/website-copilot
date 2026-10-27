@@ -1,0 +1,1414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Website CoPilot</title>
+<style>
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: #e2e8f0;
+  background: #020617;
+}
+header {
+  padding: 24px max(24px, calc((100vw - 1360px)/2));
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+h1 { margin: 0; font-size: 23px; letter-spacing: -.7px; }
+.subtitle { color: #94a3b8; font-size: 13px; }
+main {
+  max-width: 1360px;
+  margin: auto;
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+.panel {
+  background: #0f172a;
+  border: 1px solid #253247;
+  border-radius: 15px;
+  padding: 20px;
+}
+h2 { margin: 0 0 16px; font-size: 15px; }
+textarea, input {
+  background: #020617;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 9px;
+  padding: 12px;
+  width: 100%;
+  font: inherit;
+  outline: none;
+}
+textarea { min-height: 92px; resize: vertical; }
+textarea:focus, input:focus { border-color: #22d3ee; }
+.fields { display: grid; gap: 12px; }
+button {
+  background: #0891b2;
+  color: white;
+  border: 0;
+  border-radius: 9px;
+  padding: 11px 17px;
+  font-weight: 650;
+  cursor: pointer;
+}
+button:hover { background: #06b6d4; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.secondary {
+  color: #cbd5e1;
+  background: #1e293b;
+}
+button.secondary:hover { background: #334155; }
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+#status { color: #67e8f9; font-size: 13px; }
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 20px;
+  align-items: start;
+}
+.preview {
+  width: 100%;
+  aspect-ratio: 16/10;
+  background: #020617;
+  object-fit: contain;
+  border-radius: 9px;
+  border: 1px solid #334155;
+}
+#currentUrl {
+  color: #94a3b8;
+  word-break: break-all;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+#activity {
+  max-height: 520px;
+  overflow: auto;
+  display: grid;
+  gap: 9px;
+}
+.event {
+  color: #cbd5e1;
+  background: #172238;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.event time { color: #64748b; margin-right: 7px; }
+#interaction { display: none; border-color: #0891b2; }
+#options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 14px 0;
+}
+#question { font-size: 15px; line-height: 1.5; }
+#actionInfo { color: #94a3b8; font-size: 12px; }
+.reply {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.reply input { flex: 1; min-width: 220px; }
+#result { white-space: pre-wrap; font-size: 13px; color: #94a3b8; }
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Website <span style="color:#22d3ee">CoPilot</span></h1>
+    <div class="subtitle">Autonomous browser agent · Ollama + Playwright</div>
+  </div>
+  <span id="status">Idle</span>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>What should CoPilot do?</h2>
+    <form id="taskForm" class="fields">
+      <textarea id="instruction" required
+        placeholder="Describe your task naturally..."></textarea>
+      <input id="startUrl" type="url"
+        placeholder="Starting website (optional)">
+      <div class="toolbar">
+        <label class="subtitle" for="maxSteps">Action budget:
+          <select id="maxSteps" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px">
+            <option value="6">Quick · 6 actions</option>
+            <option value="12" selected>Standard · 12 actions</option>
+            <option value="30">Extended · 30 actions</option>
+          </select>
+        </label>
+        <span class="subtitle">
+          The agent chooses one action at a time.
+        </span>
+        <div style="display:flex;gap:10px">
+          <button id="startBtn" type="submit">Run CoPilot</button>
+          <button id="pauseBtn" type="button"
+            class="secondary" disabled>Pause</button>
+          <button id="resumeBtn" type="button"
+            class="secondary" disabled>Resume</button>
+          <button id="stopBtn" type="button"
+            class="secondary" disabled>Stop Agent</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel" id="interaction">
+    <h2>CoPilot needs your input</h2>
+    <div id="actionInfo"></div>
+    <p id="question"></p>
+    <div id="options"></div>
+    <form id="replyForm" class="reply">
+      <input id="replyText"
+        placeholder="Or respond in your own words...">
+      <button type="submit">Send reply</button>
+    </form>
+    <div class="subtitle" id="handoverHint"></div>
+  </section>
+
+  <div class="workspace">
+    <section class="panel">
+      <h2>Live browser</h2>
+      <div id="currentUrl">No page opened yet</div>
+      <img id="preview" class="preview"
+        alt="Current browser screenshot">
+      <p class="subtitle">
+        Read-only preview. For manual OTP, password or CAPTCHA,
+        interact directly with the Chromium window.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>Agent activity</h2>
+      <div id="activity"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Task result</h2>
+    <div id="result">No task has been run yet.</div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let activeDialog = null;
+
+async function post(path, data) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw Error(result.error || "Request failed.");
+  }
+
+  return result;
+}
+
+async function reply(data) {
+  if (!activeDialog) return;
+
+  const id = activeDialog.id;
+
+  activeDialog = null;
+  $("interaction").style.display = "none";
+
+  try {
+    await post("/api/reply", { id, ...data });
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function showDialog(dialog) {
+  activeDialog = dialog;
+
+  $("interaction").style.display = "block";
+  $("question").textContent = dialog.question || "Your input is required.";
+
+  const pending = dialog.pendingAction;
+
+  $("actionInfo").textContent = pending
+    ? `${pending.website} · ${pending.operation} · ${pending.targetLabel}`
+    : dialog.field
+      ? `Sensitive field: ${dialog.field.label}`
+      : "";
+
+  $("handoverHint").textContent =
+    dialog.kind === "human_handover"
+      ? "Use secure password entry below, or show the real browser."
+      : "";
+
+  const options = $("options");
+  options.replaceChildren();
+
+  const secureMode =
+    dialog.kind === "human_handover" &&
+    dialog.field?.secureEntrySupported === true;
+
+  options.style.display = secureMode ? "grid" : "";
+  options.style.gap = secureMode ? "12px" : "";
+
+  let manualActions = null;
+
+  // Never use the general conversation input for credentials.
+  $("replyForm").style.display =
+    dialog.kind === "human_handover" ? "none" : "";
+
+  if (
+    dialog.kind === "human_handover" &&
+    dialog.field?.secureEntrySupported === true
+  ) {
+    const form = document.createElement("form");
+
+    form.style.cssText =
+      "display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;";
+
+    const input = document.createElement("input");
+    input.type = "password";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = "Password — entered privately";
+    input.style.cssText =
+      "flex:1;min-width:200px;padding:11px;";
+
+    const button = document.createElement("button");
+    button.type = "submit";
+    button.textContent = "Fill securely & resume";
+
+    const message = document.createElement("div");
+    message.style.cssText =
+      "width:100%;font-size:12px;color:#94a3b8;";
+
+    form.append(input, button, message);
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      if (!input.value || button.disabled) return;
+
+      let secret = input.value;
+
+      // Remove the value from the UI immediately.
+      input.value = "";
+      button.disabled = true;
+      message.textContent = "Filling the website field...";
+
+      try {
+        await post("/api/secure-password", {
+          id: dialog.id,
+          secret
+        });
+
+        secret = "";
+
+        if (activeDialog?.id === dialog.id) {
+          activeDialog = null;
+          $("interaction").style.display = "none";
+        }
+
+      } catch (error) {
+        secret = "";
+        message.textContent = error.message;
+        button.disabled = false;
+      }
+    });
+
+    form.style.width = "100%";
+    form.style.margin = "8px 0 0";
+    options.append(form);
+
+    manualActions = document.createElement("div");
+    manualActions.id = "copilotManualHandoverActions";
+    manualActions.style.cssText =
+      "display:flex;align-items:center;" +
+      "gap:10px;flex-wrap:wrap;";
+
+    const openBrowser = document.createElement("button");
+    openBrowser.type = "button";
+    openBrowser.className = "secondary";
+    openBrowser.textContent = "Open real browser";
+
+    const feedback = document.createElement("span");
+    feedback.style.cssText =
+      "font-size:12px;color:#94a3b8;";
+
+    openBrowser.onclick = async () => {
+      if (openBrowser.disabled) return;
+
+      openBrowser.disabled = true;
+
+      try {
+        await post("/api/browser-visibility", {
+          visible: true
+        });
+
+        // Switch from secure-entry mode to manual-entry mode.
+        form.remove();
+        openBrowser.remove();
+
+        const done = document.createElement("button");
+        done.type = "button";
+        done.textContent = "I've entered it — resume";
+
+        done.onclick = () => reply({
+          optionId: "done"
+        });
+
+        manualActions.prepend(done);
+
+        feedback.textContent =
+          "Enter the password in Chromium, then resume.";
+
+        $("handoverHint").textContent =
+          "Manual entry selected. CoPilot will verify " +
+          "the password field after you resume.";
+
+      } catch (error) {
+        feedback.textContent = error.message;
+        openBrowser.disabled = false;
+      }
+    };
+
+    manualActions.append(openBrowser, feedback);
+    options.append(manualActions);
+  }
+
+  for (const option of dialog.options || []) {
+    if (secureMode && option.id === "done") continue;
+    const button = document.createElement("button");
+
+    button.textContent = option.label;
+    button.className =
+      ["deny", "cancel", "manual", "clarify"].includes(option.id)
+        ? "secondary"
+        : "";
+
+    button.onclick = () => reply({ optionId: option.id });
+
+    (manualActions || options).append(button);
+  }
+
+  $("interaction").scrollIntoView({ behavior: "smooth" });
+}
+
+function render(state) {
+  $("status").textContent = state.phase;
+  $("currentUrl").textContent = state.url || "No page opened yet";
+
+  $("startBtn").disabled =
+    !["idle", "finished", "error", "cancelled"].includes(state.phase);
+
+  $("stopBtn").disabled =
+    ![
+      "starting",
+      "running",
+      "approval_request",
+      "approval_confirmation",
+      "human_handover"
+    ].includes(state.phase);
+  $("pauseBtn").disabled = state.phase !== "running";
+  $("resumeBtn").disabled = state.phase !== "paused";
+
+  if (state.phase === "paused") {
+    $("stopBtn").disabled = false;
+  }
+
+
+  const activity = $("activity");
+  activity.replaceChildren();
+
+  for (const item of state.activity || []) {
+    const line = document.createElement("div");
+    line.className = "event";
+
+    const time = document.createElement("time");
+    time.textContent = item.at;
+
+    const content = document.createElement("span");
+    content.textContent = item.text;
+
+    line.append(time, content);
+    activity.append(line);
+  }
+
+  if (state.result) {
+    $("result").textContent =
+      `Status: ${state.result.status}\n` +
+      (state.result.reason || "") +
+      `\nVerified execution records: ${state.result.history?.length || 0}`;
+  } else if (state.error) {
+    $("result").textContent = `Error: ${state.error}`;
+  }
+
+  if (state.pending) {
+    if (activeDialog?.id !== state.pending.id) {
+      showDialog(state.pending);
+    }
+  } else {
+    activeDialog = null;
+    $("interaction").style.display = "none";
+  }
+}
+
+$("taskForm").onsubmit = async event => {
+  event.preventDefault();
+
+  try {
+    await post("/api/start", {
+      instruction: $("instruction").value,
+      startUrl: $("startUrl").value.trim(),
+      maxSteps: Number($("maxSteps").value)
+    });
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+$("pauseBtn").onclick = async () => {
+  $("pauseBtn").disabled = true;
+
+  try {
+    await post("/api/pause", {});
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+$("resumeBtn").onclick = async () => {
+  $("resumeBtn").disabled = true;
+
+  try {
+    await post("/api/resume", {});
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+$("stopBtn").onclick = async () => {
+  $("stopBtn").disabled = true;
+
+  try {
+    await post("/api/stop", {});
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+$("replyForm").onsubmit = event => {
+  event.preventDefault();
+
+  const text = $("replyText").value.trim();
+
+  if (!text) return;
+
+  $("replyText").value = "";
+  reply({ text });
+};
+
+const events = new EventSource("/api/events");
+
+events.onmessage = event => {
+  render(JSON.parse(event.data));
+};
+
+
+let screenshotRefreshing = false;
+let previousScreenshotObjectUrl = null;
+
+async function refreshVerifiedScreenshot() {
+  if (screenshotRefreshing) return;
+
+  screenshotRefreshing = true;
+  const preview = $("preview");
+
+  try {
+    const response = await fetch(
+      `/api/screenshot?t=${Date.now()}`,
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      preview.dataset.snapshotId = "";
+      return;
+    }
+
+    const snapshotId =
+      response.headers.get("X-CoPilot-Snapshot") || "";
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    preview.dataset.snapshotId = "";
+    preview.src = objectUrl;
+
+    try {
+      await preview.decode();
+
+      if (preview.src === objectUrl) {
+        preview.dataset.snapshotId = snapshotId;
+      }
+
+      if (previousScreenshotObjectUrl) {
+        URL.revokeObjectURL(previousScreenshotObjectUrl);
+      }
+
+      previousScreenshotObjectUrl = objectUrl;
+
+    } catch {
+      preview.dataset.snapshotId = "";
+      URL.revokeObjectURL(objectUrl);
+    }
+
+  } catch {
+    preview.dataset.snapshotId = "";
+  } finally {
+    screenshotRefreshing = false;
+  }
+}
+
+setInterval(refreshVerifiedScreenshot, 1800);
+void refreshVerifiedScreenshot();
+
+</script>
+
+<script id="copilot-two-control-toggle">
+(() => {
+  const byId = id => document.getElementById(id);
+
+  const run = byId("startBtn");
+  const stop = byId("stopBtn");
+  const pause = byId("pauseBtn");
+  const resume = byId("resumeBtn");
+
+  if (![run, stop, pause, resume].every(Boolean)) {
+    console.error("CoPilot controls not found.");
+    return;
+  }
+
+  // Preserve existing handlers, but replace four visible buttons
+  // with two state-driven controls.
+  const primary = document.createElement("button");
+  primary.type = "button";
+  primary.id = "runStopToggle";
+  primary.textContent = "Run CoPilot";
+
+  const secondary = document.createElement("button");
+  secondary.type = "button";
+  secondary.id = "pauseResumeToggle";
+  secondary.className = "secondary";
+  secondary.textContent = "Pause";
+  secondary.hidden = true;
+  secondary.style.display = "none";
+
+  const parent = run.parentElement;
+  parent.insertBefore(primary, run);
+  parent.insertBefore(secondary, run);
+
+  for (const button of [run, stop, pause, resume]) {
+    button.hidden = true;
+    button.style.display = "none";
+  }
+
+  let phase = "idle";
+  let busy = false;
+
+  const inactive = new Set([
+    "idle", "finished", "error", "cancelled"
+  ]);
+
+  function render() {
+    const isInactive = inactive.has(phase);
+    const isStopping = phase === "stopping";
+    const canPause = phase === "running" || phase === "paused";
+
+    primary.textContent = isStopping
+      ? "Stopping…"
+      : isInactive
+        ? "Run CoPilot"
+        : "Stop Agent";
+
+    primary.disabled = busy || isStopping;
+
+    secondary.style.display = canPause ? "" : "none";
+    secondary.hidden = !canPause;
+    secondary.textContent =
+      phase === "paused" ? "Resume" : "Pause";
+    secondary.disabled = busy;
+  }
+
+  async function request(path) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}"
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Request failed.");
+    }
+
+    return data;
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch("/api/state", {
+        cache: "no-store"
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const next = data.phase ?? data.state?.phase;
+
+      if (typeof next === "string") {
+        phase = next;
+        render();
+      }
+    } catch {
+      // Connection errors should not alter the running agent.
+    }
+  }
+
+  primary.onclick = async () => {
+    if (busy || phase === "stopping") return;
+
+    if (inactive.has(phase)) {
+      // Reuse the existing form submission handler.
+      phase = "starting";
+      busy = true;
+      render();
+
+      run.click();
+      busy = false;
+
+      // Existing dashboard handles validation and errors.
+      setTimeout(refresh, 350);
+      return;
+    }
+
+    // Hide Pause/Resume immediately after Stop is clicked.
+    phase = "stopping";
+    busy = true;
+    render();
+
+    try {
+      await request("/api/stop");
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      busy = false;
+      await refresh();
+    }
+  };
+
+  secondary.onclick = async () => {
+    if (busy) return;
+
+    const action = phase === "paused"
+      ? "resume"
+      : phase === "running"
+        ? "pause"
+        : null;
+
+    if (!action) return;
+
+    busy = true;
+    render();
+
+    try {
+      await request("/api/" + action);
+      phase = action === "pause" ? "paused" : "running";
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      busy = false;
+      render();
+      await refresh();
+    }
+  };
+
+  render();
+  refresh();
+
+  // Synchronize the controls with the existing server state.
+  setInterval(refresh, 700);
+})();
+</script>
+
+
+<script id="copilot-browser-enhancement">
+(() => {
+  const heading = [...document.querySelectorAll("h1,h2,h3,h4")]
+    .find(node => node.textContent.trim().toLowerCase() === "live browser");
+
+  const screenshot =
+    document.querySelector('img[alt="Current browser screenshot"]') ||
+    document.querySelector('img[src*="/api/screenshot"]');
+
+  if (!heading && !screenshot) {
+    console.warn("Live Browser container not located.");
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "browserTabPanel";
+  panel.style.cssText =
+    "margin:12px 0;display:grid;gap:10px;";
+
+  const tabs = document.createElement("div");
+  tabs.style.cssText =
+    "display:flex;gap:8px;flex-wrap:wrap;align-items:center;";
+
+  const location = document.createElement("div");
+  location.style.cssText =
+    "padding:10px 12px;border:1px solid #334155;" +
+    "background:#0f172a;border-radius:9px;" +
+    "font-size:12px;color:#94a3b8;" +
+    "overflow-wrap:anywhere;";
+
+  const status = document.createElement("div");
+  status.style.cssText = "font-size:12px;color:#94a3b8;";
+
+  panel.append(tabs, location, status);
+
+  if (heading) {
+    heading.insertAdjacentElement("afterend", panel);
+  } else {
+    screenshot.parentElement.insertBefore(panel, screenshot);
+  }
+
+  if (screenshot) {
+    screenshot.style.width = "100%";
+    screenshot.style.height = "auto";
+    screenshot.style.maxHeight = "650px";
+    screenshot.style.objectFit = "contain";
+    screenshot.style.borderRadius = "10px";
+    screenshot.style.cursor = "zoom-in";
+    screenshot.style.background = "#020617";
+  }
+
+  // Read-only screenshot enlargement.
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+    "position:fixed;inset:0;background:rgba(0,0,0,.92);" +
+    "z-index:99999;display:none;align-items:center;" +
+    "justify-content:center;padding:20px;cursor:zoom-out;";
+
+  const enlarged = document.createElement("img");
+  enlarged.alt = "Enlarged browser screenshot";
+  enlarged.style.cssText =
+    "max-width:100%;max-height:94vh;object-fit:contain;";
+
+  overlay.append(enlarged);
+  document.body.append(overlay);
+
+  function closeZoom() {
+    overlay.style.display = "none";
+  }
+
+  if (screenshot) {
+    screenshot.addEventListener("click", () => {
+      if (!screenshot.naturalWidth) return;
+      enlarged.src = screenshot.currentSrc || screenshot.src;
+      overlay.style.display = "flex";
+    });
+  }
+
+  overlay.addEventListener("click", closeZoom);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeZoom();
+  });
+
+  function render(data) {
+    tabs.replaceChildren();
+
+    const entries = Array.isArray(data.tabs) ? data.tabs : [];
+
+    if (!entries.length) {
+      location.textContent = "Browser tab information unavailable";
+      status.textContent = "The task URL and result remain available above.";
+
+      if (screenshot) screenshot.style.display = "none";
+      return;
+    }
+
+    if (screenshot) screenshot.style.display = "";
+
+    for (const tab of entries) {
+      const chip = document.createElement("span");
+
+      chip.textContent =
+        `${tab.index}. ${tab.title || "Untitled"}` +
+        (tab.active ? " · Agent tab" : "");
+
+      chip.title = tab.url || "";
+      chip.style.cssText =
+        "padding:7px 11px;border-radius:8px;" +
+        "border:1px solid " +
+        (tab.active ? "#22d3ee" : "#334155") + ";" +
+        "background:" +
+        (tab.active ? "#164e63" : "#1e293b") + ";" +
+        "color:#e2e8f0;font-size:12px;";
+
+      tabs.append(chip);
+    }
+
+    const active = entries.find(tab => tab.active);
+
+    location.textContent =
+      active?.url ||
+      (entries.length === 1
+        ? entries[0].url
+        : "Agent's current tab is not uniquely identified");
+
+    status.textContent = data.activeKnown
+      ? `${entries.length} tab(s) · Agent-observed tab identified`
+      : data.tracking === "ambiguous"
+        ? `${entries.length} tab(s) · Multiple tabs share the observed URL`
+        : `${entries.length} tab(s) · Awaiting agent observation`;
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch("/api/browser-tabs", {
+        cache: "no-store"
+      });
+
+      if (!response.ok) return;
+      render(await response.json());
+    } catch {
+      status.textContent = "Browser status temporarily unavailable.";
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 2500);
+})();
+</script>
+
+
+<script id="copilot-control-ownership">
+
+(() => {
+  const banner = document.createElement("div");
+  banner.id = "browserControlOwnership";
+  banner.setAttribute("role", "status");
+  banner.setAttribute("aria-live", "polite");
+
+  banner.style.cssText = [
+    "padding:12px 14px",
+    "margin:12px 0",
+    "border:1px solid #334155",
+    "background:#0f172a",
+    "border-radius:10px",
+    "color:#cbd5e1",
+    "font-size:13px"
+  ].join(";");
+
+  const title = document.createElement("div");
+  title.style.cssText = "font-weight:600;margin-bottom:4px";
+
+  const description = document.createElement("div");
+  description.style.cssText = "color:#94a3b8";
+
+  banner.append(title, description);
+
+  const panel = document.getElementById("browserTabPanel");
+  const screenshot =
+    document.querySelector('img[src*="/api/screenshot"]');
+
+  if (panel) {
+    panel.insertAdjacentElement("afterend", banner);
+  } else if (screenshot) {
+    screenshot.parentElement.insertBefore(banner, screenshot);
+  } else {
+    const heading = [...document.querySelectorAll("h1,h2,h3")]
+      .find(el => el.textContent.trim() === "Live browser");
+
+    if (heading) {
+      heading.insertAdjacentElement("afterend", banner);
+    } else {
+      document.body.append(banner);
+    }
+  }
+
+  const displays = {
+    idle: [
+      "○ Ready to start",
+      "The browser is not currently controlled by an agent."
+    ],
+    starting: [
+      "◌ Starting CoPilot",
+      "Preparing Chromium and the browser workflow."
+    ],
+    running: [
+      "● CoPilot controlling browser",
+      "The agent may interact with the page. Use Pause before manual control."
+    ],
+    pausing: [
+      "◌ Waiting for safe pause",
+      "Do not interact manually until pause is acknowledged."
+    ],
+    paused: [
+      "✓ Manual control available",
+      "Use the Chromium window directly. Resume when finished."
+    ],
+    stopping: [
+      "◌ Stopping CoPilot",
+      "Cancellation is in progress."
+    ],
+    finished: [
+      "✓ Task finished",
+      "The autonomous run has ended."
+    ],
+    cancelled: [
+      "■ Task stopped",
+      "The agent has been cancelled."
+    ],
+    error: [
+      "! Agent stopped with an error",
+      "Review the task result for details."
+    ]
+  };
+
+  let lastPhase = null;
+  let updating = false;
+
+  async function refresh() {
+    if (updating) return;
+    updating = true;
+
+    try {
+      const response = await fetch("/api/state", {
+        cache: "no-store"
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const phase = data.phase ?? data.state?.phase ?? "idle";
+
+      const taskStatus = data.result?.status ?? '';
+      const updateKey = phase + ':' + taskStatus;
+      if (updateKey === lastPhase) return;
+      lastPhase = updateKey;
+
+      const [heading, details] = phase === 'finished'
+        ? (['verified_complete', 'persisted_complete'].includes(taskStatus)
+            ? ['✓ Task completed successfully', 'The requested outcome was verified.']
+            : taskStatus === 'action_outcome_unverified'
+              ? ['? Task outcome unverified', 'An action ran, but its outcome could not be confirmed.']
+              : taskStatus === 'step_limit_reached'
+                ? ['! Task stopped — action limit reached', 'The task was not completed.']
+                : ['! Task could not be completed', taskStatus || 'The run stopped without verifying success.'])
+        : (displays[phase] ?? ["◌ Agent status: " + phase, ""]);
+
+      title.textContent = heading;
+      description.textContent = details;
+
+      banner.style.borderColor =
+        phase === "paused" ||
+        (phase === "finished" && ['verified_complete', 'persisted_complete'].includes(taskStatus))
+          ? "#10b981"
+          : phase === "running"
+            ? "#06b6d4"
+            : "#334155";
+    } catch {
+      title.textContent = "○ Browser connection unavailable";
+      description.textContent = "Waiting for the local dashboard server.";
+      lastPhase = null;
+    } finally {
+      updating = false;
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 1600);
+})();
+
+</script>
+
+<script id="copilot-manual-controls">
+
+(() => {
+  const screenshot =
+    document.querySelector('img[src*="/api/screenshot"]') ||
+    document.querySelector('img[alt="Current browser screenshot"]');
+
+  if (!screenshot) {
+    console.warn("Manual controls: screenshot element unavailable.");
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "copilotManualPanel";
+  panel.style.cssText =
+    "display:none;margin:12px 0;padding:14px;" +
+    "border:1px solid #06b6d4;border-radius:10px;" +
+    "background:#0f172a;color:#e2e8f0;";
+
+  const heading = document.createElement("strong");
+  heading.textContent = "Manual browser control";
+
+  const hint = document.createElement("p");
+  hint.textContent =
+    "Click or scroll the screenshot. Use Chromium directly " +
+    "for passwords, OTPs and CAPTCHA.";
+  hint.style.cssText =
+    "font-size:12px;color:#94a3b8;margin:8px 0;";
+
+  const row = document.createElement("div");
+  row.style.cssText =
+    "display:flex;gap:8px;flex-wrap:wrap;align-items:center;";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Type ordinary text into the focused webpage field";
+  input.autocomplete = "off";
+  input.style.cssText =
+    "flex:1;min-width:180px;padding:9px;border-radius:8px;" +
+    "background:#020617;color:white;border:1px solid #475569;";
+
+  const status = document.createElement("p");
+  status.style.cssText =
+    "font-size:12px;color:#94a3b8;margin-top:10px;";
+
+  let phase = "idle";
+  let activeTabId = null;
+  let busy = false;
+  let syncing = false;
+
+  let lastScreenshotLoadedAt = 0;
+
+  screenshot.addEventListener("load", () => {
+    lastScreenshotLoadedAt = performance.now();
+  });
+
+  if (screenshot.complete && screenshot.naturalWidth > 0) {
+    lastScreenshotLoadedAt = performance.now();
+  }
+
+  function makeButton(label, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.className = "secondary";
+    button.onclick = handler;
+    return button;
+  }
+
+  async function send(action, extra = {}) {
+    if (phase !== "paused" || !activeTabId || busy) return false;
+
+    busy = true;
+    status.textContent = "Applying manual action…";
+
+    try {
+      const response = await fetch("/api/manual-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          tabId: activeTabId,
+          ...extra
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Manual action failed.");
+      }
+
+      status.textContent = "Manual action completed.";
+      return true;
+
+    } catch (error) {
+      status.textContent = error.message;
+      return false;
+
+    } finally {
+      busy = false;
+    }
+  }
+
+  const typeButton = makeButton("Type", async () => {
+    if (!input.value) return;
+
+    const value = input.value;
+
+    if (await send("type", { text: value })) {
+      input.value = "";
+    }
+  });
+
+  row.append(input, typeButton);
+
+  for (const key of ["Tab", "Enter", "Escape", "Backspace"]) {
+    row.append(
+      makeButton(key === "Escape" ? "Esc" : key, () =>
+        send("key", { key })
+      )
+    );
+  }
+
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      typeButton.click();
+    }
+  });
+
+  panel.append(heading, hint, row, status);
+
+  const ownership = document.getElementById(
+    "browserControlOwnership"
+  );
+
+  if (ownership) {
+    ownership.insertAdjacentElement("afterend", panel);
+  } else {
+    screenshot.parentElement.insertBefore(panel, screenshot);
+  }
+
+  // Convert screenshot display coordinates to viewport ratios,
+  // including possible object-fit letterboxing.
+  function pointOnScreenshot(event) {
+    const rect = screenshot.getBoundingClientRect();
+
+    if (!screenshot.naturalWidth || !screenshot.naturalHeight ||
+        !rect.width || !rect.height) return null;
+
+    const ratio =
+      screenshot.naturalWidth / screenshot.naturalHeight;
+
+    const width = Math.min(rect.width, rect.height * ratio);
+    const height = Math.min(rect.height, rect.width / ratio);
+
+    const left = rect.left + (rect.width - width) / 2;
+    const top = rect.top + (rect.height - height) / 2;
+
+    const x = (event.clientX - left) / width;
+    const y = (event.clientY - top) / height;
+
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+
+    return { xRatio: x, yRatio: y };
+  }
+
+  // Capture before the existing click-to-zoom listener.
+  screenshot.addEventListener("click", event => {
+    if (phase !== "paused") return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const screenshotAge =
+      performance.now() - lastScreenshotLoadedAt;
+
+    if (
+      !lastScreenshotLoadedAt ||
+      screenshotAge > 3000
+    ) {
+      status.textContent =
+        "Screenshot is outdated. Waiting for a fresh image.";
+      return;
+    }
+
+    const point = pointOnScreenshot(event);
+
+    if (point) {
+      const snapshotId = screenshot.dataset.snapshotId;
+
+      if (!snapshotId) {
+        status.textContent =
+          "Waiting for a verified browser screenshot.";
+        return;
+      }
+
+      void send("click", { ...point, snapshotId });
+    }
+  }, true);
+
+  screenshot.addEventListener("wheel", event => {
+    if (phase !== "paused") return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    void send("scroll", {
+      deltaX: event.deltaX,
+      deltaY: event.deltaY
+    });
+  }, { capture: true, passive: false });
+
+  async function refresh() {
+    if (syncing) return;
+    syncing = true;
+
+    try {
+      const [stateResponse, tabsResponse] = await Promise.all([
+        fetch("/api/state", { cache: "no-store" }),
+        fetch("/api/browser-tabs", { cache: "no-store" })
+      ]);
+
+      if (!stateResponse.ok || !tabsResponse.ok) return;
+
+      const state = await stateResponse.json();
+      const tabs = await tabsResponse.json();
+
+      phase = state.phase ?? state.state?.phase ?? "idle";
+
+      activeTabId =
+        tabs.tabs?.find(tab => tab.active)?.id ?? null;
+
+      panel.style.display = phase === "paused" ? "block" : "none";
+
+      screenshot.style.cursor =
+        phase === "paused" ? "crosshair" : "zoom-in";
+
+      if (phase === "paused" && !activeTabId) {
+        status.textContent =
+          "Waiting for the agent's active tab identity.";
+      }
+
+    } catch {
+      // A temporary UI connectivity issue cannot execute an action.
+    } finally {
+      syncing = false;
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 1000);
+})();
+
+</script>
+
+<script id="copilot-visibility-toggle">
+(() => {
+  const preview = document.getElementById("preview");
+  if (!preview) return;
+
+  const bar = document.createElement("div");
+  bar.style.cssText =
+    "display:flex;align-items:center;gap:10px;" +
+    "flex-wrap:wrap;margin:10px 0;";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "secondary";
+
+  const note = document.createElement("span");
+  note.style.cssText = "font-size:12px;color:#94a3b8;";
+
+  bar.append(button, note);
+  preview.insertAdjacentElement("beforebegin", bar);
+
+  let current = null;
+  let busy = false;
+
+  function renderVisibility(state) {
+    current = state;
+
+    const active =
+      state.phase !== "idle" &&
+      state.phase !== "starting" &&
+      state.phase !== "cancelled" &&
+      state.phase !== "error";
+
+    button.style.display = active ? "" : "none";
+
+    button.disabled =
+      busy ||
+      !active ||
+      state.browserControlAvailable === false;
+
+    button.textContent = state.browserVisible
+      ? "Hide real browser"
+      : "Show real browser";
+
+    note.textContent =
+      state.browserControlAvailable === false
+        ? "Window control unavailable on this Chromium setup."
+        : "The live preview remains inside CoPilot.";
+  }
+
+  button.addEventListener("click", async () => {
+    if (!current || busy) return;
+
+    busy = true;
+    renderVisibility(current);
+
+    try {
+      const response = await fetch("/api/browser-visibility", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          visible: !current.browserVisible
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Window control failed.");
+      }
+    } catch (error) {
+      note.textContent = error.message;
+    } finally {
+      busy = false;
+      if (current) renderVisibility(current);
+    }
+  });
+
+  const events = new EventSource("/api/events");
+
+  events.onmessage = event => {
+    try {
+      renderVisibility(JSON.parse(event.data));
+    } catch {}
+  };
+
+  fetch("/api/state")
+    .then(response => response.json())
+    .then(renderVisibility)
+    .catch(() => {});
+})();
+</script>
+
+</body>
+</html>
