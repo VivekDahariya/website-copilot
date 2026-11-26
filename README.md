@@ -42,6 +42,9 @@ The engineering emphasis is on **grounding, control, verification, and recovery*
 | Explicit PDF identification and download | Live-tested |
 | PDF integrity validation and temporary delivery | Live-tested |
 | URL-less destination discovery | Experimental; requires careful destination verification |
+| Answers read from the page (read-only questions, and "open X then tell me Y") | Implemented; answers come from the page text and say so when the page does not state them |
+| Run history in the dashboard, with re-run | Implemented; kept per browser session, cleared on refresh |
+| Reliability battery that reports a false-success rate | Implemented; see [Testing and validation](#testing-and-validation) |
 | Recovery from arbitrary dynamic pages | Under continued testing |
 
 **Important:** Implemented does not mean proven on every website. Some capabilities have automated regression coverage, while others still need broader real-world validation.
@@ -104,7 +107,9 @@ flowchart TD
 | `src/executor/` | Playwright browser actions |
 | `src/ui/server.js` | Local HTTP dashboard backend and agent coordination |
 | `src/ui/index.html` | Browser-based workspace and agent activity interface |
-| `tests/` and root-level `test-*.js` | Automated tests and regression scenarios |
+| `src/ui/history.html` | History page: past tasks of this browser session, with re-run |
+| `tests/` | Automated tests (`npm test`) and the reliability battery (`npm run battery`) |
+| root-level `test-*.js` | Historical test scripts from earlier development |
 
 The decision layer is hybrid by design: the local model handles general reasoning, while deterministic rules provide bounded behavior for cases where a specific action can be verified from page evidence.
 
@@ -115,7 +120,8 @@ The decision layer is hybrid by design: the local model handles general reasonin
 | **Node.js (ES modules)** | Agent orchestration and HTTP backend | Asynchronous browser operations, event handling, and a single JavaScript runtime |
 | **Playwright + Chromium** | Browser automation | Programmatic browser contexts, page inspection, interaction, and download handling |
 | **Ollama** | Local language-model serving | A self-hosted inference interface without requiring an external LLM API for the planner |
-| **Qwen3 4B Instruct** | Local planning model used in the tested deployment | A comparatively lightweight model for locally controlled action decisions |
+| **Qwen3 4B** (`qwen3:4b`) | Local planning model: chooses the next browser action | A comparatively lightweight model for locally controlled action decisions |
+| **Qwen2.5 3B** (`qwen2.5:3b`) | Local reading model: writes short answers from page text | Answers in seconds; the planner model thinks at length, which makes reading slow |
 | **HTML, CSS, JavaScript** | Dashboard | Direct control over a lightweight browser workspace |
 | **Node.js crypto APIs** | File integrity verification | SHA-256 validation of delivered downloads |
 
@@ -150,32 +156,43 @@ Install and start Ollama using its official instructions:
 
 https://ollama.com/download
 
-Pull the model used for the tested configuration:
+Pull the two models used in the tested configuration (roughly 2 to 3 GB each):
 
 ```bash
-ollama pull qwen3:4b-instruct
+ollama pull qwen3:4b      # planner: chooses the next browser action
+ollama pull qwen2.5:3b    # reader: answers questions from page text
 ```
 
-Ensure the Ollama service is running. The model must be available to the backend for tasks requiring model-based decisions.
+Ensure the Ollama service is running. If the reading model is missing, answering a question fails with a message that names the model and the `ollama pull` command to run.
+
+The tested machine was a MacBook Air (M2, 8 GB). Other machines will differ in speed.
 
 ### 4. Start Website CoPilot
 
-On macOS or Linux:
-
 ```bash
-PORT=4317 \
-COPILOT_OLLAMA_MODEL=qwen3:4b-instruct \
-COPILOT_HEADLESS=1 \
-node src/ui/server.js
+npm start
 ```
 
 Open:
 
 **http://127.0.0.1:4317**
 
-The server runs locally by default in the documented configuration. If port `4317` is occupied, choose another available port.
+By default the server listens on `127.0.0.1` only. This is a development setup, not a hardened public internet deployment.
 
-This is a development setup, not a hardened public internet deployment.
+#### Configuration
+
+Everything has a default, so the command above is enough. To change a setting, set it in the shell, or copy `.env.example` to `.env`, edit it and start with `node --env-file=.env src/ui/server.js` (Node 20.6 or newer).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PORT` | `4317` | Dashboard port |
+| `COPILOT_BIND_HOST` | `127.0.0.1` | Address the dashboard listens on |
+| `COPILOT_OLLAMA_MODEL` | `qwen3:4b` | Planner model |
+| `COPILOT_READING_MODEL` | `qwen2.5:3b` | Model that writes answers from page text |
+| `COPILOT_OLLAMA_URL` | `http://127.0.0.1:11434/api/chat` | Ollama endpoint |
+| `COPILOT_HEADLESS` | unset | `1` runs Chromium with no window at all |
+| `COPILOT_HIDDEN_LAUNCH` | unset | `0` opens a normal (minimised) window instead of starting Chromium hidden |
+| `COPILOT_MAX_STEPS` | `12` | Maximum actions per run (limit 50) |
 
 ## How to use
 
@@ -245,13 +262,28 @@ The user should be able to understand what occurred instead of receiving an unsu
 
 The repository contains unit, integration, browser-workflow, safety, and regression tests developed during the project.
 
-One existing safety regression can be executed with:
+### Automated tests
 
 ```bash
-node tests/step74/agent-driven-approval.js
+npm test
 ```
 
-Tests that rely on Chromium, Ollama, external websites, or a particular fixture require their respective runtime dependencies.
+Runs the maintained test files in `package.json` one after another and stops at the first failure. It needs Chromium (see step 2) and takes a few minutes. It does not need Ollama or internet access: the model and the websites are replaced by local stand-ins. The root-level `test-*.js` files are historical scripts from earlier development. They are not part of `npm test`, and several of them no longer pass.
+
+### Reliability battery
+
+```bash
+npm run battery                           # all cases, once
+COPILOT_BATTERY_REPEATS=3 npm run battery # repeat each case
+COPILOT_BATTERY_ONLY=checkbox,slow-page npm run battery
+COPILOT_BATTERY_VERBOSE=1 npm run battery # show the agent's own log
+```
+
+The battery runs the real agent with the real local models against a small local test website and judges each run by what actually happened in the browser, not by what the agent said. Every run lands in one of: pass, honest failure (did not succeed and said so), under-claim (succeeded but did not say so), **false success** (claimed success without the real outcome), or unsafe effect. The headline number is the false-success rate. It needs Ollama running with both models pulled.
+
+The 16 cases cover: clicking links, multi-page navigation, reading answers from a page, filling and submitting a form, a select and a checkbox, a fact the page does not state, a button that does not exist, a request to delete an account (which must be refused), an unreachable address, a cookie notice covering the page, a link that opens a new tab, and a slow page.
+
+Last measured on the author's MacBook Air (M2, 8 GB): 2 passes of all 16 cases gave 32 of 32 passing, with 0 false successes and 0 unsafe effects (about 17 s per run on average). This is a small local test site and a small number of runs. It shows the agent does not claim success it did not achieve on these cases. It does not measure real websites.
 
 ### Validation already performed
 
@@ -260,8 +292,9 @@ Tests that rely on Chromium, Ollama, external websites, or a particular fixture 
 - Agent-generated PDF download and byte-verification tests.
 - Local HTTP dashboard and temporary-download API checks.
 - Successful production-hosted IRS Form W-4 PDF delivery.
+- A reliability battery of 16 cases with a measured false-success rate (see above).
 
-**Current limitation:** A complete, reproducible, environment-independent end-to-end test suite has not yet been established. Passing a selected test does not establish universal reliability.
+**Current limitation:** The battery runs against a local test website, and results on real websites are not measured. Passing the tests does not establish universal reliability.
 
 ## Security and privacy considerations
 
@@ -283,6 +316,9 @@ The GitHub repository intentionally excludes local runtime artifacts and histori
 - Arbitrary JavaScript-triggered downloads do not yet have the same live validation as direct PDF links.
 - Ambiguous links and document identities can require additional user guidance.
 - Complex authentication, CAPTCHA, and OTP flows can require human intervention.
+- Questions with no website named are answered by searching the web and choosing a result. This is heuristic: it may ask for clarification instead of guessing.
+- When a cookie notice offers no way to decline or close it, the agent may click its accept control to continue the task. This is a deliberate choice, not a verified-safe policy for every site.
+- Run history is kept in the browser tab for the current server run and is not stored on disk.
 - The current UI is a developer-facing workspace, not a polished multi-tenant SaaS product.
 - The prototype has not been audited or load-tested for public multi-user hosting.
 
@@ -314,8 +350,11 @@ website-copilot/
 │   ├── observer/
 │   └── ui/
 ├── tests/
-├── test-*.js
+│   ├── battery/        reliability battery (cases, local test site, runner)
+│   └── test-*.mjs      automated tests run by `npm test`
+├── test-*.js           historical test scripts, not run by npm test
 ├── browser-test.js
+├── .env.example
 ├── package.json
 ├── package-lock.json
 ├── .gitignore
