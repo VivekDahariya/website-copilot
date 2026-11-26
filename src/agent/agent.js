@@ -43,6 +43,7 @@ import { screenshotRequest } from "./direct-instruction.js";
 import { decideNextAction } from "./local-reasoner.js";
 import { createFormFastPathSession, proposeFormBatch, proposeGroundedFormBatch, eligibleForFormFastPath, validateFormBatch } from "./form-fast-path.js";
 import { createTabContext } from "./tab-context.js";
+import { mayReactLate, waitForLateReaction } from "./late-reaction.js";
 import { createExplicitTabWorkflow } from "./explicit-tab-workflow.js";
 import {
   extractDesiredState,
@@ -1586,6 +1587,7 @@ export async function runAgent(
     );
 
     const urlBeforeAction = page.url();
+    const revisionBeforeAction = await getDomRevision(page).catch(() => null);
 
     const safetyDecision = authorizeBrowserAction(decision, element);
 
@@ -2395,7 +2397,21 @@ export async function runAgent(
       progressGuard.recordNavigation(page.url());
     }
 
-    const afterObservationResult = await observer(page);
+    let afterObservationResult = await observer(page);
+
+    // The page may answer a moment after the action ran. When nothing visibly
+    // changed, give it a short, bounded chance before judging the action.
+    if (afterObservationResult.status === "ready" && mayReactLate({
+      decision, result, before: observation,
+      after: afterObservationResult.observation,
+      urlBefore: urlBeforeAction, urlNow: page.url()
+    })) {
+      if (await waitForLateReaction(page, { sinceRevision: revisionBeforeAction })) {
+        console.log("The page reacted late. Re-observing.");
+        afterObservationResult = await observer(page);
+      }
+    }
+
     if (afterObservationResult.status === 'ready') {
       afterObservationResult.observation = browserBaseline.enrich(afterObservationResult.observation);
       formMutationPolicy.observe(afterObservationResult.observation);

@@ -460,7 +460,9 @@ export async function observePage(page) {
     }
   }
 
-  const headings = await page.locator("h1,h2,h3").allTextContents();
+  // Only headings a person can see. A hidden section (a success message that
+  // has not been shown yet, a collapsed panel) must not read as evidence.
+  const headings = await page.locator(":is(h1,h2,h3):visible").allTextContents();
 
   const headingEvidence = await page.evaluate(() =>
     [...document.querySelectorAll("h1,h2,h3")]

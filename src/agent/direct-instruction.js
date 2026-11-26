@@ -83,6 +83,15 @@ const NON_EVIDENCE_WORDS = new Set((
   "home example called named labeled labelled titled whose present visible displayed shown " +
   "exactly appears appear available correct right explain describe summarize summarise " +
   "about information details answer question says say contains contain " +
+  // Other forms of the reading verbs above ("verify that it explains X"), and
+  // plain prepositions that say how to get somewhere ("through the Help
+  // Center"). Neither is text a page has to print. They are listed whole
+  // rather than stemmed, because a stem can collide with a real word
+  // ("news" -> "new").
+  "explains describes summarizes summarises shows tells gives verifies confirms " +
+  "ensures mentions mention mentioned " +
+  "through via across within inside between among around per upon toward towards " +
+  "along beyond throughout during against " +
   // Describes which site is meant, not something a page prints about itself.
   // Site identity is established when the site is found, not from page text.
   "official officially"
