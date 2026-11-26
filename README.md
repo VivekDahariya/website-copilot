@@ -281,9 +281,9 @@ COPILOT_BATTERY_VERBOSE=1 npm run battery # show the agent's own log
 
 The battery runs the real agent with the real local models against a small local test website and judges each run by what actually happened in the browser, not by what the agent said. Every run lands in one of: pass, honest failure (did not succeed and said so), under-claim (succeeded but did not say so), **false success** (claimed success without the real outcome), or unsafe effect. The headline number is the false-success rate. It needs Ollama running with both models pulled.
 
-The 16 cases cover: clicking links, multi-page navigation, reading answers from a page, filling and submitting a form, a select and a checkbox, a fact the page does not state, a button that does not exist, a request to delete an account (which must be refused), an unreachable address, a cookie notice covering the page, a link that opens a new tab, and a slow page.
+The 18 cases cover: clicking links, multi-page navigation, reading answers from a page, filling and submitting a form, a select and a checkbox, a fact the page does not state, a button that does not exist, a request to delete an account (which must be refused), an unreachable address, a cookie notice covering the page, a link that opens a new tab, a slow page, and going back (a click followed by "go back", and a "go back" when there is no earlier page to return to).
 
-Last measured on the author's MacBook Air (M2, 8 GB): 2 passes of all 16 cases gave 32 of 32 passing, with 0 false successes and 0 unsafe effects (about 17 s per run on average). This is a small local test site and a small number of runs. It shows the agent does not claim success it did not achieve on these cases. It does not measure real websites.
+Last measured on the author's MacBook Air (M2, 8 GB): 2 passes of the original 16 cases gave 32 of 32 passing, with 0 false successes and 0 unsafe effects (about 17 s per run on average). After later changes, one more pass of those 16 gave 16 of 16, and the two going-back cases, 3 runs each, gave 6 of 6, again with 0 false successes and 0 unsafe effects. All 18 cases have not been run together in one pass. This is a small local test site and a small number of runs. It shows the agent does not claim success it did not achieve on these cases. It does not measure real websites.
 
 ### Validation already performed
 
@@ -292,7 +292,7 @@ Last measured on the author's MacBook Air (M2, 8 GB): 2 passes of all 16 cases g
 - Agent-generated PDF download and byte-verification tests.
 - Local HTTP dashboard and temporary-download API checks.
 - Successful production-hosted IRS Form W-4 PDF delivery.
-- A reliability battery of 16 cases with a measured false-success rate (see above).
+- A reliability battery of 18 cases with a measured false-success rate (see above).
 
 **Current limitation:** The battery runs against a local test website, and results on real websites are not measured. Passing the tests does not establish universal reliability.
 
@@ -316,7 +316,8 @@ The GitHub repository intentionally excludes local runtime artifacts and histori
 - A small local planner can miss a step the instruction names only by a verb (for example "Confirm the preferences" meaning a checkbox). The run then ends as an unverified completion claim, not as a success.
 - Arbitrary JavaScript-triggered downloads do not yet have the same live validation as direct PDF links.
 - Ambiguous links and document identities can require additional user guidance.
-- Complex authentication, CAPTCHA, and OTP flows can require human intervention.
+- When a CAPTCHA widget or a bot-check page blocks a submit, the agent stops and asks the person to solve it in the browser, then continues from fresh evidence (at most 3 handovers per run). This is tested against pages that imitate the providers' markup, not against live reCAPTCHA, hCaptcha or Turnstile sites. Passwords and one-time codes are entered by the person, not by the model, and complex authentication flows can still require human intervention.
+- A "go back" request with no earlier page ends as a planning-stagnation stop, without saying that there is nothing to go back to.
 - Questions with no website named are answered by searching the web and choosing a result. This is heuristic: it may ask for clarification instead of guessing.
 - When a cookie notice offers no way to decline or close it, the agent may click its accept control to continue the task. This is a deliberate choice, not a verified-safe policy for every site.
 - Run history is kept in the browser tab for the current server run and is not stored on disk.

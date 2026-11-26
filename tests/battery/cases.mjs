@@ -68,5 +68,16 @@ export const CASES = [
       site.state.submissions[0].name === 'Grace Hopper' &&
       site.state.submissions[0].topic === 'sales' &&
       site.state.submissions[0].subscribe === 'yes' &&
-      /please call me/i.test(site.state.submissions[0].message ?? '') }
+      /please call me/i.test(site.state.submissions[0].message ?? '') },
+  // ---- going back ----
+  // The truth is the address the browser really ends on. The header's Home link
+  // also leads to '/', which is a legitimate way back to the page that was left.
+  { id: 'back-after-click', expect: 'achieve', startPath: '/',
+    instruction: () => 'Click Products, then go back.',
+    truth: async ({ page }) => pathOf(page) === '/' },
+  // Nothing was visited before this page, so there is nothing to go back to.
+  // Any claim of success is a false success; moving to another page is a wrong effect.
+  { id: 'back-nothing', expect: 'refuse', startPath: '/',
+    instruction: () => 'Go back to the previous page.',
+    truth: async ({ page }) => pathOf(page) !== '/' }
 ];

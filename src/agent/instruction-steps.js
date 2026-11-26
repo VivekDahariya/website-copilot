@@ -7,7 +7,7 @@
 const FILLER = new Set("the a an on its my our your this that".split(" "));
 const CONTROL_NOUN = /\s+(?:link|button|tab|icon|item|option|menu|entry)\s*$/i;
 const NOT_NAMED = /\d|\b(?:first|second|third|fourth|fifth|last|next|previous|all|every|each|both|any|random|one|two|three|and|or)\b/i;
-const OTHER_VERB = /\b(?:read|scroll|type|fill|enter|write|search|check|tick|untick|download|save|take|show|explain|describe|summari[sz]e|screenshot|wait|log|sign|submit|send|select|choose|pick|hover|drag|upload|find|look|tell|list|count|compare|extract|copy)\b/i;
+const OTHER_VERB = /\b(?:read|scroll|type|fill|enter|write|search|check|tick|untick|download|save|take|show|explain|describe|summari[sz]e|screenshot|wait|log|sign|submit|send|select|choose|pick|hover|drag|upload|find|look|tell|list|count|compare|extract|copy|return)\b/i;
 
 const norm = value => String(value ?? "").normalize("NFKC").toLowerCase()
   .replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
@@ -48,7 +48,7 @@ export function sequencedTargets(instruction) {
         const name = nameTokens(match[1]);
         if (name.length) targets.push({kind, name, display: match[1].replace(/^the\s+/i, "") + " page"});
       }
-    } else if (/^(?:please\s+)?(?:go\s+back|return|come\s+back|navigate\s+back)\b/i.test(clause)) {
+    } else if (/^(?:please\s+)?(?:go\s+back|return(?=\s*$|\s+(?:back|to)\b)|come\s+back|navigate\s+back)\b/i.test(clause)) {
       kind = "back";
       targets.push({kind, name: [], display: clause});
     } else if (kind === "click" && !OTHER_VERB.test(clause) && norm(clause).split(" ").length <= 4 &&
@@ -86,9 +86,19 @@ export function sequencedTargets(instruction) {
 const verified = entry =>
   entry?.execution?.executionCompleted === true && entry?.execution?.verified !== false;
 
-function matches(target, entry) {
+function matches(target, entry, earlier = []) {
   const operation = entry?.decision?.operation;
-  if (target.kind === "back") return ["back", "click", "switch_tab"].includes(operation);
+  if (target.kind === "back") {
+    if (operation === "back" || operation === "switch_tab") return true;
+    // A click is "going back" only when it landed on a page the run had
+    // already left (an in-page "Back to home" link). A click that went on to
+    // somewhere new is not.
+    const reached = entry?.execution?.urlAfter;
+    return operation === "click" && Boolean(reached) &&
+      entry.execution.previousUrl !== reached &&
+      earlier.some(prior => prior?.execution?.previousUrl &&
+        sameAddress(prior.execution.previousUrl, reached));
+  }
   if (operation !== "click") return false;
   const wanted = new Set(target.name);
   const sharing = text => {
@@ -124,11 +134,11 @@ export function unmetSteps(instruction, history = [], { currentWords = new Set()
       // The result of the final step is what the run must end on, so the
       // latest matching action counts (the run may have repeated it).
       for (let index = history.length - 1; index >= from; index -= 1) {
-        if (verified(history[index]) && matches(target, history[index])) { found = index; break; }
+        if (verified(history[index]) && matches(target, history[index], history.slice(0, index))) { found = index; break; }
       }
     } else {
       for (let index = from; index < history.length; index += 1) {
-        if (verified(history[index]) && matches(target, history[index])) { found = index; break; }
+        if (verified(history[index]) && matches(target, history[index], history.slice(0, index))) { found = index; break; }
       }
     }
     if (isLast) lastIndex = found;
