@@ -48,14 +48,15 @@ if (ranked[0].label !== "Travel") {
   throw new Error("Travel was not ranked first.");
 }
 
-if (
-  selected.some(element =>
-    ["Home", "Poetry", "Next"].includes(element.label)
-  )
-) {
-  throw new Error(
-    "Irrelevant elements were not filtered."
-  );
+// Controls whose labels share nothing with the task are deliberately kept:
+// multi-step workflows need intermediate controls. The relevant control must
+// still be offered first, and nothing observed may be discarded.
+if (selected.length !== elements.length) {
+  throw new Error("Observed controls were discarded.");
+}
+
+if (selected[0].label !== "Travel") {
+  throw new Error("The relevant control was not offered first.");
 }
 
 console.log("\nELEMENT RANKING: PASSED");

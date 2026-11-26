@@ -170,7 +170,12 @@ try {
   );
 
   assert.equal(resultB.status, "planning_stagnation");
-  assert.equal(resultB.steps, 2);
+  // Two clicks walk the A <-> B cycle; the agent then backs out twice
+  // (tree-backtrack recovery) and stops. No further clicks are made.
+  assert.deepEqual(
+    resultB.history.map(entry => entry.execution?.operation),
+    ["click", "click", "back", "back"]
+  );
   assert.equal(
     new URL(resultB.finalUrl).pathname,
     "/a"

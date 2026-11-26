@@ -38,13 +38,26 @@ const mockFetch = async () => ({
   })
 });
 
-await assert.rejects(
-  () => interpretTask(
-    "Compare products",
-    { fetchImpl: mockFetch }
-  ),
-  /Unsupported URL protocol/
+// An unsafe URL is never accepted or navigated to. With no grounded URL in
+// the instruction the interpreter asks for clarification instead of throwing.
+const unsafe = await interpretTask(
+  "Compare products",
+  { fetchImpl: mockFetch }
 );
+
+assert.equal(unsafe.status, "needs_clarification");
+assert.equal(unsafe.task, undefined);
+assert.equal(JSON.stringify(unsafe).includes("javascript:"), false);
+
+// When the user did supply a real URL, a model-supplied unsafe URL cannot
+// replace it.
+const grounded = await interpretTask(
+  "Open https://shop.example/ and compare 3 Travel products",
+  { fetchImpl: mockFetch }
+);
+
+assert.equal(grounded.status, "interpreted");
+assert.equal(grounded.task.startUrl, "https://shop.example/");
 
 console.log("TEST 2: PASSED");
 

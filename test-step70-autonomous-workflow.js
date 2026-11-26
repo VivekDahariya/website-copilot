@@ -41,6 +41,10 @@ try {
   console.log("AUTONOMOUS MULTI-STEP WORKFLOW");
   console.log("INSTRUCTION:", instruction);
 
+  // The dashboard opens the start URL before it hands the page to the agent.
+  // Do the same here so the agent starts on the site, not on a blank page.
+  await page.goto(`${BASE}/`);
+
   const result = await executeNaturalLanguageTask(
     page,
     instruction

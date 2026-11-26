@@ -10,6 +10,7 @@ import {
 
 const observation = {
   url: "https://example.com/help/security",
+  title: "Security Guide - Help Center",
   headings: ["Security Guide"],
   visibleBodyText:
     "Enable two-factor authentication to protect your account.",
@@ -127,6 +128,21 @@ check(
   },
   true
 );
+
+// A heading alone is not enough when neither the title nor the path
+// corroborates it.
+assert.equal(
+  verifyGoal(
+    { ...observation, title: "Welcome - Example" },
+    validateGoalSchema({
+      type: "page_destination",
+      heading: "Security Guide"
+    })
+  ).completed,
+  false
+);
+
+console.log("PASSED: Heading without title or path corroboration fails");
 
 assert.equal(
   verifyGoal(observation, {

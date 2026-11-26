@@ -5,6 +5,10 @@ import {
   authorizeBrowserAction
 } from "./src/agent/action-safety-policy.js";
 
+import {
+  createActionApproval
+} from "./src/agent/action-approval.js";
+
 const cases = [
   {
     name: "Ordinary navigation",
@@ -128,28 +132,54 @@ assert.equal(
   false
 );
 
+const approvalContext = {
+  pageUrl: "https://mail.example/inbox",
+  targetIdentity: "Send Message"
+};
+
+// A plain object that only claims to be granted is not an approval.
 assert.equal(
   authorizeBrowserAction(
     action,
     element,
-    {
-      granted: true,
-      actionRef: "e7",
-      operation: "click"
-    }
+    { granted: true, actionRef: "e7", operation: "click" },
+    approvalContext
+  ).allowed,
+  false
+);
+
+// An approval issued for exactly this action, page and target is accepted.
+assert.equal(
+  authorizeBrowserAction(
+    action,
+    element,
+    createActionApproval(action, approvalContext),
+    approvalContext
   ).allowed,
   true
 );
 
+// An approval issued for a different action is refused.
 assert.equal(
   authorizeBrowserAction(
     action,
     element,
-    {
-      granted: true,
-      actionRef: "e8",
-      operation: "click"
-    }
+    createActionApproval(
+      { ref: "e8", operation: "click" },
+      approvalContext
+    ),
+    approvalContext
+  ).allowed,
+  false
+);
+
+// An approval presented on a different page is refused.
+assert.equal(
+  authorizeBrowserAction(
+    action,
+    element,
+    createActionApproval(action, approvalContext),
+    { ...approvalContext, pageUrl: "https://other.example/" }
   ).allowed,
   false
 );

@@ -268,7 +268,7 @@ The repository contains unit, integration, browser-workflow, safety, and regress
 npm test
 ```
 
-Runs the maintained test files in `package.json` one after another and stops at the first failure. It needs Chromium (see step 2) and takes a few minutes. It does not need Ollama or internet access: the model and the websites are replaced by local stand-ins. The root-level `test-*.js` files are historical scripts from earlier development. They are not part of `npm test`, and several of them no longer pass.
+Runs the maintained test files in `package.json` one after another and stops at the first failure. It needs Chromium (see step 2) and takes a few minutes. It does not need Ollama or internet access: the model and the websites are replaced by local stand-ins. The root-level `test-*.js` files are historical scripts from earlier development and are not part of `npm test`. At the last check on the author's machine (Ollama running) 51 of the 62 pass. The other 11 do not: `test-step70-autonomous-workflow` (the small local planner does not tick the confirmation checkbox, so the run ends honestly as an unverified completion claim), `test-natural-language-executor` (asserts the earlier structured product-comparison flow, which is no longer the default), `test-agent` and `test-composite-integration` (wait on live Wikipedia and the local model), and seven more that wait on the local model or live websites. Treat these as unmaintained; the battery is the current end-to-end check.
 
 ### Reliability battery
 
@@ -313,6 +313,7 @@ The GitHub repository intentionally excludes local runtime artifacts and histori
 
 - General multi-step success varies with website structure and dynamic behavior.
 - Some interactions require more local-model planning time than others.
+- A small local planner can miss a step the instruction names only by a verb (for example "Confirm the preferences" meaning a checkbox). The run then ends as an unverified completion claim, not as a success.
 - Arbitrary JavaScript-triggered downloads do not yet have the same live validation as direct PDF links.
 - Ambiguous links and document identities can require additional user guidance.
 - Complex authentication, CAPTCHA, and OTP flows can require human intervention.

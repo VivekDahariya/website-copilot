@@ -9,6 +9,16 @@ let reasonerCalls = 0;
 const page = {
   url() {
     return "https://validation.example/";
+  },
+  // The agent keeps track of the browser's tabs through the page's context.
+  context() {
+    return { pages: () => [page] };
+  },
+  isClosed() {
+    return false;
+  },
+  async title() {
+    return "";
   }
 };
 
