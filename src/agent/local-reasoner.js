@@ -426,7 +426,8 @@ export async function decideNextAction(
   // completion verifier still decides, from the browser.
   if (directMode && rejectedCompletions.length === 0) {
     const steps = unmetSteps(withoutOpening, history ?? []);
-    if (steps.applies && steps.missing.length === 0 &&
+    // Two or more steps only: a lone click has its own, exact-name shortcut above.
+    if (steps.applies && steps.targets.length >= 2 && steps.missing.length === 0 &&
         steps.lastIndex === (history ?? []).length - 1 &&
         lastEntry?.execution?.executionCompleted === true &&
         !lastEntry.execution?.errorCode) {

@@ -732,7 +732,9 @@ export function verifyDirectCompletion({
 
   // The last step's result must still be what is open. A run that did every
   // step and then clicked somewhere else is not finished where it was asked to be.
-  if (steps.applies && steps.lastIndex >= 0) {
+  // Only for a sequence: one named click followed by "switch back to the first
+  // tab" legitimately leaves the clicked page behind.
+  if (steps.applies && steps.targets.length >= 2 && steps.lastIndex >= 0) {
     const lastStep = history[steps.lastIndex].execution ?? {};
     const opened = lastStep.previousUrl && lastStep.urlAfter &&
       lastStep.previousUrl !== lastStep.urlAfter;

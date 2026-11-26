@@ -109,7 +109,11 @@ function matches(target, entry) {
 // that is open (the run started there, or a site search landed there).
 export function unmetSteps(instruction, history = [], { currentWords = new Set() } = {}) {
   const targets = sequencedTargets(instruction);
-  if (targets.length < 2) return {applies: false, missing: [], targets, lastIndex: -1};
+  // One named click is a step too: "type Alice, then click Continue" is not
+  // done until Continue was clicked, however plainly the word is printed on
+  // the page. A lone page or back step keeps its own checks.
+  const loneClick = targets.length === 1 && targets[0].kind === "click";
+  if (targets.length < 2 && !loneClick) return {applies: false, missing: [], targets, lastIndex: -1};
   const missing = [];
   let from = 0;
   let lastIndex = -1;

@@ -59,7 +59,11 @@ assert.equal(unmetSteps(both, repeated).lastIndex, 3, 'the latest matching actio
 assert.equal(sameAddress('https://x.test/news#top', 'https://x.test/news/'), true);
 assert.equal(sameAddress('https://x.test/news', 'https://x.test/sport'), false);
 assert.equal(sameAddress('https://x.test/n?a=1', 'https://x.test/n?a=2'), false);
-assert.equal(unmetSteps('Click the Sport link', []).applies, false, 'a single step is left to the other checks');
+assert.equal(unmetSteps('Click the Sport link', []).applies, true, 'a single named click is a step: the word on the page is not a click');
+assert.deepEqual(unmetSteps('Click the Sport link', []).missing, ['Sport']);
+assert.deepEqual(unmetSteps('Click the Sport link', [entry('Sport', 'http://x.test/sport')]).missing, []);
+assert.equal(unmetSteps('Open the Products page', []).applies, false, 'a single page step is left to the other checks');
+assert.equal(unmetSteps('Go back', []).applies, false, 'a single back step is left to the other checks');
 ok('each step needs its own verified action, in order');
 
 // ---- Real runs.

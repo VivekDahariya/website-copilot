@@ -522,8 +522,9 @@ async function runTaskCore(instruction, startUrl, maxSteps = 12) {
 
         const reply = await askUser({
         kind: "human_handover",
-        question:
-          "Enter the password securely below, or show Chromium for manual entry.",
+        question: String(handover.field?.type ?? "").toLowerCase() === "captcha"
+          ? "A human-verification check (CAPTCHA) needs a person. Choose Show real browser, complete it there, then press \"I've completed it\"."
+          : "Enter the password securely below, or show Chromium for manual entry.",
         field: {
           label: handover.field?.label ?? "",
           type: handover.field?.type ?? "",

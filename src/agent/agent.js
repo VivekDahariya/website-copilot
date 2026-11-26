@@ -44,6 +44,7 @@ import { decideNextAction } from "./local-reasoner.js";
 import { createFormFastPathSession, proposeFormBatch, proposeGroundedFormBatch, eligibleForFormFastPath, validateFormBatch } from "./form-fast-path.js";
 import { createTabContext } from "./tab-context.js";
 import { mayReactLate, waitForLateReaction } from "./late-reaction.js";
+import { detectChallenge } from "./challenge-wall.js";
 import { createExplicitTabWorkflow } from "./explicit-tab-workflow.js";
 import {
   extractDesiredState,
@@ -169,6 +170,71 @@ export async function runAgent(
   emitAgentEvent("agent_started", { url: page.url() });
 
   const tabContext = createTabContext(page);
+  // A human-verification challenge (CAPTCHA) is passed only by a person. The
+  // same handover provider that serves password fields serves it, once per
+  // challenge: if the person says it is done and the challenge is still
+  // there, the run stops instead of asking again.
+  let challengeHandovers = 0;
+  let lastChallengeKey = null;
+  const handOverChallenge = async (challenge, step) => {
+    const key = `${challenge.kind}|${page.url()}`;
+    if (key === lastChallengeKey || challengeHandovers >= 3) {
+      return {
+        stop: {
+          status: "human_handover_unverified",
+          reason: "The verification challenge is still shown after the manual step.",
+          steps: history.length,
+          finalUrl: page.url(),
+          history
+        }
+      };
+    }
+    const screenshot = await page.screenshot({ type: "png" }).catch(() => null);
+    const handover = {
+      pageUrl: page.url(),
+      field: {
+        ref: "",
+        label: "Human verification (CAPTCHA)",
+        type: "captcha",
+        boundingBox: null
+      },
+      reason: "A human-verification challenge must be completed by a person.",
+      screenshotPngBase64: screenshot ? screenshot.toString("base64") : null
+    };
+    const paused = {
+      status: "human_handover_required",
+      steps: history.length,
+      finalUrl: page.url(),
+      handover,
+      history
+    };
+    if (typeof humanHandoverProvider !== "function") return { stop: paused };
+    challengeHandovers += 1;
+    const response = await humanHandoverProvider({
+      page, handover, targetHandle: null
+    });
+    if (response?.completed !== true) return { stop: paused };
+    lastChallengeKey = key;
+    emitAgentEvent("action_selected", {
+      ref: "", operation: "human_handover",
+      targetLabel: handover.field.label, url: page.url()
+    });
+    emitAgentEvent("action_executed", {
+      ref: "", operation: "human_handover",
+      executionCompleted: true, verified: null, url: page.url()
+    });
+    history.push({
+      step,
+      targetLabel: handover.field.label,
+      decision: { ref: "", operation: "human_handover", value: "" },
+      execution: {
+        executionCompleted: true,
+        performedBy: "user",
+        verified: null
+      }
+    });
+    return { stop: null };
+  };
   const originalAgentPage = page;
   // Which tab the agent is looking at, for the completion check: a task that
   // says "switch back to the first tab" or "in the new tab" is only complete
@@ -333,6 +399,19 @@ export async function runAgent(
           history
         };
       }
+    }
+
+    // The page itself may be a human-verification wall. Only a person can
+    // pass it, so hand over exactly then. A page that merely talks about
+    // CAPTCHAs is not one; see challenge-wall.js.
+    {
+      const challenge = await detectChallenge(page, observation);
+      if (challenge.kind === "interstitial") {
+        const outcome = await handOverChallenge(challenge, step);
+        if (outcome.stop) return outcome.stop;
+        continue;
+      }
+      if (challenge.kind === null) lastChallengeKey = null;
     }
 
     // A login was just submitted. If the sign-in form is still there and the
@@ -1579,6 +1658,20 @@ export async function runAgent(
     }
 
 
+
+    // Placed before the attempt is recorded: the submit has not happened yet,
+    // so proposing it again after the person is done is not a repeat.
+    // A form that holds an unsolved human-verification widget cannot be
+    // submitted by the agent. Hand over just before the submit, not earlier:
+    // reading or filling the form needs no person.
+    if (isSubmitAction(decision, element)) {
+      const challenge = await detectChallenge(page, observation);
+      if (challenge.kind === "widget" || challenge.kind === "interstitial") {
+        const outcome = await handOverChallenge(challenge, step);
+        if (outcome.stop) return outcome.stop;
+        continue;
+      }
+    }
 
     progressGuard.recordAttempt(
       observation,

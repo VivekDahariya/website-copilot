@@ -157,11 +157,12 @@ try {
       assert.equal(calls,1,'a named control that was clicked needs no second planner call');
       ok('a clicked named control ends the run after one planner call');
 
-      // A wording the shortcut does not cover still reaches the repeat check.
+      // A wording that names no control is not a step the planner can tick off
+      // itself, so it still reaches the repeat check.
       calls = 0;
       await page.setContent(detailsHtml);
       const result = await executeNaturalLanguageTask(page,
-        'Click the "Show details" button once.',
+        'Click the first button on the page.',
         {orchestratorOptions:{agentOptions:{maxSteps:8}}});
       const run = result.execution?.result ?? {};
       assert.equal(result.status,'verified_complete');
