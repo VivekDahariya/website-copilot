@@ -80,9 +80,11 @@ export function isExplicitPdfDownloadRequest(instruction) {
 export function verifyRequestedPdfIdentity({
   instruction,
   filename,
+  bytes = null,
   linkText = "",
   linkHref = "",
-  pageTitle = ""
+  pageTitle = "",
+  descriptionEvidence = null
 } = {}) {
   const reject = (reason, extra = {}) => ({
     matched: false,
@@ -155,6 +157,119 @@ export function verifyRequestedPdfIdentity({
       targetWords.has(word) ||
       contextWords.has(word)
   );
+
+  // A user may identify a document by a quoted description rather
+  // than its filename. Accept this only when the live DOM tied that
+  // exact description to one uniquely identified PDF link.
+  //
+  // Never use this fallback to override an explicit filename,
+  // semester, year, or document identifier in the user's request.
+  const quotedDescriptions = [
+    ...String(instruction ?? "").matchAll(
+      /["“]([^"”\n]{8,160})["”]/g
+    )
+  ].map(match => match[1].replace(/\s+/g, " ").trim());
+
+  const descriptor = String(
+    descriptionEvidence?.description ?? ""
+  ).replace(/\s+/g, " ").trim();
+
+  const nearbyText = String(
+    descriptionEvidence?.nearbyText ?? ""
+  ).replace(/\s+/g, " ").trim().toLowerCase();
+
+  const hasSeparateDocumentIdentifier =
+    /\b[^\s"'<>/\\]+\.pdf\b/i.test(instruction) ||
+    /\b(?:semester|sem)\s*\d+\b/i.test(instruction) ||
+    /\b(?:19|20)\d{2}\b/.test(instruction) ||
+    /\b[a-z]{1,6}\d{1,5}[a-z]?\b/i.test(instruction);
+
+  if (
+    !hasSeparateDocumentIdentifier &&
+    descriptor &&
+    quotedDescriptions.includes(descriptor) &&
+    descriptionEvidence?.href === linkHref &&
+    descriptionEvidence?.pdfLinkCount === 1 &&
+    nearbyText.includes(descriptor.toLowerCase())
+  ) {
+    return {
+      matched: true,
+      reason: "DESCRIPTIVE_LINK_IDENTITY_SUPPORTED",
+      filename,
+      requestedTerms: [...requested],
+      matchedTerms,
+      matchedTargetTerms
+    };
+  }
+
+  // Explicitly named, size-specific PDF downloads can be
+  // identified by their selected label, verified filename,
+  // and independently captured byte count.
+  //
+  // Do not treat unrelated workflow instructions as
+  // required document-identifying keywords.
+  const quotedLink = String(instruction ?? "").match(
+    /\bclick\s+(?:the\s+)?link\s+(?:labeled|labelled|named)\s+["'“‘]([^"'“”‘’\r\n]{1,150})["'”’]/i
+  )?.[1]?.replace(/\s+/g, " ").trim();
+
+  const selectedLabel = String(linkText ?? "")
+    .replace(/\s+/g, " ").trim();
+
+  const sizeMatch = quotedLink?.match(
+    /^Download\s+(\d{1,4})\s*(KB|MB|GB)\s+PDF$/i
+  );
+
+  const negativeClick =
+    /\b(?:do\s+not|don't|never)\s+click\s+(?:the\s+)?link\s+(?:labeled|labelled|named)\b/i
+      .test(String(instruction ?? ""));
+
+  let trustedScheme = false;
+  try {
+    trustedScheme = ["http:", "https:"].includes(
+      new URL(linkHref).protocol
+    );
+  } catch {
+    trustedScheme = false;
+  }
+
+  if (
+    !hasSeparateDocumentIdentifier &&
+    !negativeClick &&
+    trustedScheme &&
+    sizeMatch &&
+    quotedLink === selectedLabel &&
+    Number.isSafeInteger(bytes)
+  ) {
+    const amount = Number(sizeMatch[1]);
+    const unit = sizeMatch[2].toLowerCase();
+    const power = {kb:1, mb:2, gb:3}[unit];
+    const sizeToken = `${amount}${unit}`;
+
+    const filenameTokens = String(filename)
+      .toLowerCase()
+      .replace(/\.pdf$/i, "")
+      .split(/[^a-z0-9]+/);
+
+    const expectedBytes = [
+      amount * (1024 ** power),
+      amount * (1000 ** power)
+    ];
+
+    if (
+      filenameTokens.includes(sizeToken) &&
+      expectedBytes.includes(bytes)
+    ) {
+      return {
+        matched:true,
+        reason:"EXPLICIT_NAMED_PDF_SIZE_VERIFIED",
+        filename,
+        verifiedBytes:bytes,
+        requestedLabel:quotedLink,
+        matchedTargetTerms,
+        matchedTerms
+      };
+    }
+  }
 
   if (matchedTargetTerms.length === 0) {
     return reject("NO_TARGET_SPECIFIC_MATCH", {

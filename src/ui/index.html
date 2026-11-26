@@ -52,6 +52,7 @@ svg{display:block}
 @media (max-width:1150px){.workspace{grid-template-columns:minmax(0,1fr)}.activity-card{min-height:310px}.activity-scroller{max-height:300px}.main-content{padding:24px 22px 36px}}
 @media (max-width:750px){.topbar{padding:0 16px;height:70px}.brandname{font-size:17px}.brand-sub{font-size:10px}.local-badge{display:none}.shell{grid-template-columns:1fr}.sidebar{position:static;height:auto;min-height:0;padding:8px 11px;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);gap:5px}.nav-kicker,.sidebar-spacer,.agent-health{display:none}.nav-item{width:auto;min-width:max-content;padding:9px 12px;font-size:12px}.nav-item .nav-trail{display:none}.main-content{padding:20px 12px 30px}.page-heading h1{font-size:21px}.stage-indicator{display:none}.task-card,.browser-card,.activity-card{padding:16px}.form-area{flex-direction:column}.form-area .btn-primary{width:100%}.task-bottom{align-items:stretch}.start-wrap{max-width:none;width:100%}.budget-wrap{justify-content:space-between;width:100%}.task-helper{display:none}.result-card{grid-template-columns:auto 1fr}.result-card>button{grid-column:1/-1;justify-self:stretch}.toast{bottom:12px;right:12px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+a.nav-item{text-decoration:none}
 </style>
 <style id="copilot-answer-style">
 #answerCard[hidden],#answerSourceLine[hidden]{
@@ -81,8 +82,182 @@ svg{display:block}
   text-decoration:underline;
 }
 </style>
+
+
+
+
+<style id="copilot-tree-popup-style">
+#visualizeActionsBtn:disabled {
+  opacity:.45;
+  cursor:not-allowed;
+}
+#actionTreePanel[hidden] { display:none!important; }
+#actionTreePanel {
+  position:fixed!important;
+  inset:0;
+  z-index:2147483000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:14px;
+  background:rgba(13,25,43,.75);
+  backdrop-filter:blur(5px);
+}
+#actionTreeDialog {
+  width:96vw;
+  height:93vh;
+  max-width:1750px;
+  max-height:1050px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border-radius:16px;
+  background:#f8fafc;
+  color:#172b4d;
+  box-shadow:0 25px 90px rgba(0,0,0,.35);
+}
+.tree-popup-top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+  padding:17px 22px;
+  background:white;
+  border-bottom:1px solid #dce4ef;
+}
+.tree-popup-title {
+  margin:0;
+  font-size:19px;
+  font-weight:750;
+}
+.tree-popup-note {
+  font-size:12px;
+  margin-top:4px;
+  color:#64748b;
+}
+.tree-popup-controls {
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.tree-popup-control {
+  border:1px solid #cbd5e1;
+  background:white;
+  color:#24364d;
+  border-radius:8px;
+  min-height:36px;
+  padding:6px 12px;
+  cursor:pointer;
+}
+.tree-popup-control:hover { background:#eef4ff; }
+.tree-popup-legend {
+  display:flex;
+  flex-wrap:wrap;
+  gap:20px;
+  padding:11px 22px;
+  font-size:12px;
+  border-bottom:1px solid #dce4ef;
+}
+.tree-popup-viewport {
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  background-image:radial-gradient(#cbd5e1 1px,transparent 1px);
+  background-size:22px 22px;
+  overscroll-behavior:contain;
+}
+#actionTreeSvg {
+  display:block;
+  max-width:none;
+  max-height:none;
+}
+.tree-popup-footer {
+  padding:12px 22px;
+  background:white;
+  border-top:1px solid #dce4ef;
+  color:#52647b;
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+@media(max-width:700px) {
+  #actionTreePanel {padding:4px}
+  #actionTreeDialog {width:100%;height:98vh}
+  .tree-popup-top {padding:12px}
+}
+</style>
+
+
+<style id="copilot-run-details-css">
+#runDetailsOverlay[hidden],
+#runDetailsOutput[hidden],
+#runDetailsLoading[hidden],
+#runDetailsError[hidden] {display:none!important}
+#runDetailsOverlay {
+  position:fixed;
+  inset:0;
+  z-index:2147483001;
+  background:rgba(11,24,43,.74);
+  backdrop-filter:blur(5px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+#runDetailsDialog {
+  width:min(850px,96vw);
+  max-height:90vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  background:white;
+  color:#172b4d;
+  border-radius:16px;
+  box-shadow:0 25px 90px rgba(0,0,0,.33);
+}
+.run-details-top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:19px 24px;
+  border-bottom:1px solid #e2e8f0;
+}
+.run-details-body {
+  overflow:auto;
+  padding:22px 24px;
+}
+.run-details-body h3 {
+  font-size:14px;
+  margin:18px 0 7px;
+}
+.run-details-body p,
+.run-details-body li {
+  font-size:13px;
+  line-height:1.65;
+  overflow-wrap:anywhere;
+}
+#runDetailsError {color:#b42318}
+</style>
+<style>
+.image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-top:6px}
+.image-item{border:1px solid #e2eaf6;border-radius:14px;padding:12px;background:#fff;display:flex;flex-direction:column;gap:10px}
+.image-item img{width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#eef3fa}
+.image-item .image-name{font-size:12.5px;font-weight:700;color:#33475f;overflow-wrap:anywhere}
+.image-item .image-meta{font-size:11.5px;color:#8496ac}
+.image-actions{display:flex;gap:8px;flex-wrap:wrap}
+#imageViewer{position:fixed;inset:0;z-index:2000;background:rgba(10,16,28,.94);display:flex;align-items:center;justify-content:center;padding:24px}
+#imageViewer[hidden]{display:none}
+#imageViewer img{max-width:100%;max-height:100%;object-fit:contain}
+#imageViewerClose{position:absolute;top:16px;right:18px}
+</style>
 </head>
 <body>
+<script>
+(function(){try{var m=document.querySelector('meta[name="wcp-session"]'),id=m?m.content:'',nav=performance.getEntriesByType('navigation')[0];
+if((nav&&nav.type==='reload')||sessionStorage.getItem('wcp.session')!==id){sessionStorage.removeItem('wcp.history');sessionStorage.removeItem('wcp.rerun')}
+sessionStorage.setItem('wcp.session',id)}catch(e){}})();
+</script>
 <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
 <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7L19 17Z"/></symbol>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></symbol>
@@ -111,17 +286,17 @@ svg{display:block}
 </header>
 <div class="shell" id="home">
  <aside class="sidebar" aria-label="Navigation"><div class="nav-kicker">Workspace</div>
-  <button type="button" class="nav-item active" data-scroll="home"><svg class="icon"><use href="#i-home"></use></svg> Home</button>
-  <button type="button" class="nav-item" data-scroll="taskCard"><svg class="icon"><use href="#i-plus"></use></svg> New Task</button>
+  <button type="button" class="nav-item placeholder" aria-disabled="true" title="Not Implemented yet"><svg class="icon"><use href="#i-home"></use></svg> Home <span class="nav-trail">Soon</span></button>
+  <button type="button" class="nav-item placeholder" aria-disabled="true" title="Not Implemented yet"><svg class="icon"><use href="#i-plus"></use></svg> New Task <span class="nav-trail">Soon</span></button>
   <button type="button" class="nav-item" data-scroll="browserCard"><svg class="icon"><use href="#i-browser"></use></svg> Browser</button>
-  <button type="button" class="nav-item placeholder" aria-disabled="true" title="Not Implemented yet"><svg class="icon"><use href="#i-clock"></use></svg> History <span class="nav-trail">Soon</span></button>
+  <a class="nav-item" href="/history" id="navHistory"><svg class="icon"><use href="#i-clock"></use></svg> History</a>
   <button type="button" class="nav-item placeholder" aria-disabled="true" title="Not Implemented yet"><svg class="icon"><use href="#i-settings"></use></svg> Settings <span class="nav-trail">Soon</span></button>
   <div class="sidebar-spacer"></div><div class="agent-health"><span class="health-dot" id="healthDot"></span><span><div class="health-title" id="healthTitle">CoPilot ready</div><div class="health-caption" id="healthCaption">Local agent dashboard</div></span></div>
  </aside>
  <main class="main-content">
   <div class="page-heading"><div><h1>Browser workspace <span style="font-size:17px;color:#80a9ef">✦</span></h1><p>Give an instruction, and let CoPilot navigate the details.</p></div><div class="stage-indicator"><span class="online-dot" id="stageDot"></span><span id="status">Ready</span></div></div>
   <section class="card task-card" id="taskCard"><div class="card-head"><h2>What should CoPilot do?</h2><span class="micro-note">Natural language tasks</span></div>
-   <form id="taskForm"><div class="form-area"><div class="instruction-wrap"><textarea id="instruction" class="task-input" required maxlength="10000" placeholder="e.g. Open a website, fill out a form, compare products, or find information..."></textarea></div><div class="run-controls"><button id="runStopToggle" type="submit" class="btn btn-primary"><svg class="icon sm"><use href="#i-play"></use></svg><span id="runButtonLabel">Run CoPilot</span></button><button id="pauseResumeToggle" type="button" class="btn btn-outline" hidden><svg class="icon sm"><use href="#i-pause"></use></svg><span id="pauseButtonLabel">Pause</span></button></div></div>
+   <form id="taskForm"><div class="form-area"><div class="instruction-wrap"><textarea id="instruction" class="task-input" required maxlength="10000" placeholder="e.g. Open a website, fill out a form, compare products, or find information..."></textarea></div><div class="run-controls"><button id="runStopToggle" type="submit" class="btn btn-primary" style="height:52px!important;min-height:52px!important;max-height:52px!important;align-self:flex-start!important;box-sizing:border-box!important;"><svg class="icon sm"><use href="#i-play"></use></svg><span id="runButtonLabel">Run CoPilot</span></button><button id="pauseResumeToggle" type="button" class="btn btn-outline" hidden style="height:52px!important;min-height:52px!important;max-height:52px!important;align-self:flex-start!important;flex:0 0 auto!important;box-sizing:border-box!important;" data-copilot-pause-fixed="1"><svg class="icon sm"><use href="#i-pause"></use></svg><span id="pauseButtonLabel">Pause</span></button></div></div>
     <div class="task-bottom"><div class="start-wrap"><label class="field-caption" for="startUrl">Starting URL</label><input id="startUrl" class="field-input" type="url" placeholder="https://example.com (optional)" autocomplete="off"></div><div class="budget-wrap"><label class="field-caption" for="maxSteps">Action budget</label><select id="maxSteps" class="budget-select"><option value="6">Quick · 6 actions</option><option value="12" selected>Standard · 12 actions</option><option value="30">Extended · 30 actions</option></select></div><span class="task-helper"><svg class="icon sm"><use href="#i-spark"></use></svg> One action at a time</span></div>
    </form>
   </section>
@@ -136,9 +311,104 @@ svg{display:block}
     <div id="copilotManualPanel" class="manual-panel" hidden><div class="manual-title">Manual browser control · Paused</div><p class="manual-info">Click or scroll the preview to interact. For passwords, OTPs, or CAPTCHA, open the real Chromium window.</p><div class="manual-row"><input id="manualInput" class="field-input" placeholder="Type ordinary text into focused field" autocomplete="off"><button id="manualTypeBtn" class="btn btn-outline btn-small" type="button">Type</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Tab">Tab</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Enter">Enter</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Escape">Esc</button><button type="button" class="btn btn-outline btn-small" data-manual-key="Backspace">⌫</button></div><div id="manualStatus" class="manual-status">Manual controls are available at a safe pause point.</div></div>
     <p class="browser-caption">Read-only while CoPilot runs. Pause for manual actions or open Chromium for sensitive steps.</p>
    </section>
-   <section class="card activity-card" id="activityCard"><div class="section-head"><h2 class="section-title"><svg class="icon"><use href="#i-clock"></use></svg> Agent activity</h2><span class="small-indicator" id="activityCounter">0 events</span></div><div id="activity" class="activity-scroller" aria-live="polite"><div class="activity-empty"><svg class="icon lg"><use href="#i-clock"></use></svg><span>Actions will appear here as CoPilot works.</span></div></div></section>
+   <section class="card activity-card" id="activityCard"><div class="section-head"><h2 class="section-title"><svg class="icon"><use href="#i-clock"></use></svg> Agent activity</h2><span class="small-indicator" id="activityCounter">0 events</span></div><div id="activity" class="activity-scroller" aria-live="polite"><div class="activity-empty"><svg class="icon lg"><use href="#i-clock"></use></svg><span>Actions will appear here as CoPilot works.</span></div></div><div style="margin-top:12px">
+      <button id="visualizeActionsBtn"
+        type="button" class="btn btn-outline btn-small" disabled>
+        Visualize Actions
+      </button>
+    </div>
+    </section>
   </div>
-  <section id="resultCard" class="card result-card"><div class="result-icon"><svg id="resultIcon" class="icon"><use href="#i-spark"></use></svg></div><div class="result-copy"><div class="result-heading" id="resultHeading">Ready when you are</div><div class="result-desc" id="resultDescription">Describe a task above to begin autonomous browsing.</div><div class="result-meta" id="resultMeta"></div></div><button id="resultDetailsBtn" type="button" class="btn btn-outline btn-small" hidden>View details <svg class="icon sm"><use href="#i-arrow-right"></use></svg></button></section>
+  
+<div id="actionTreePanel" hidden>
+  <div id="actionTreeDialog" role="dialog"
+       aria-modal="true" aria-labelledby="treePopupHeading"
+       tabindex="-1">
+    <div class="tree-popup-top">
+      <div>
+        <h2 class="tree-popup-title" id="treePopupHeading">
+          CoPilot · Action Exploration Tree
+        </h2>
+        <div class="tree-popup-note" id="treePopupSummary">
+          Actual browser actions and navigation
+        </div>
+      </div>
+      <div class="tree-popup-controls">
+        <button type="button" id="treeZoomOut"
+                class="tree-popup-control">−</button>
+        <span id="treeZoomLabel">100%</span>
+        <button type="button" id="treeZoomIn"
+                class="tree-popup-control">+</button>
+        <button type="button" id="treeFit"
+                class="tree-popup-control">Fit</button>
+        <button type="button" id="treePopupClose"
+                class="tree-popup-control"
+                aria-label="Close tree">×</button>
+      </div>
+    </div>
+    <div class="tree-popup-legend">
+      <span>🔵 Observed page</span>
+      <span>🟢 Verified destination</span>
+      <span>🟠 Actual backtrack</span>
+      <span>🔴 Failed or unconfirmed action</span>
+    </div>
+    <div id="actionTreeContent" class="tree-popup-viewport">
+      <svg id="actionTreeSvg"
+           xmlns="http://www.w3.org/2000/svg"
+           role="img" aria-label="Recorded navigation graph">
+      </svg>
+    </div>
+    <div id="treePopupFooter" class="tree-popup-footer">
+      Select a page node to inspect it.
+    </div>
+  </div>
+</div>
+
+
+    
+<div id="runDetailsOverlay" hidden>
+  <div id="runDetailsDialog" role="dialog" aria-modal="true"
+       aria-labelledby="runDetailsHeading">
+    <div class="run-details-top">
+      <div>
+        <h2 id="runDetailsHeading"
+            style="font-size:19px;margin:0">
+          CoPilot · Run Details
+        </h2>
+        <p id="runDetailsStatus"
+           style="font-size:12px;margin:6px 0 0;color:#64748b">
+          Recorded execution explanation
+        </p>
+      </div>
+      <button id="runDetailsClose" type="button"
+              class="btn btn-outline btn-small">
+        Close
+      </button>
+    </div>
+    <div class="run-details-body">
+      <p id="runDetailsLoading" role="status">
+        Asking local Ollama to explain this run…
+      </p>
+      <div id="runDetailsOutput" hidden>
+        <h3>What CoPilot did</h3>
+        <p id="runDetailsWhat"></p>
+        <h3 id="runDetailsWhyHeading">Why it passed</h3>
+        <p id="runDetailsWhy"></p>
+        <h3 id="runDetailsTryHeading" hidden>What you can try</h3>
+        <p id="runDetailsTry" hidden></p>
+        <h3>Recorded actions</h3>
+        <ol id="runDetailsActions"></ol>
+      </div>
+      <p id="runDetailsError" hidden></p>
+      <button id="runDetailsRetry" type="button"
+              class="btn btn-outline btn-small" hidden>
+        Retry explanation
+      </button>
+    </div>
+  </div>
+</div>
+
+<section id="resultCard" class="card result-card"><div class="result-icon"><svg id="resultIcon" class="icon"><use href="#i-spark"></use></svg></div><div class="result-copy"><div class="result-heading" id="resultHeading">Ready when you are</div><div class="result-desc" id="resultDescription">Describe a task above to begin autonomous browsing.</div><div class="result-meta" id="resultMeta"></div></div><button id="resultDetailsBtn" type="button" class="btn btn-outline btn-small" hidden>View details <svg class="icon sm"><use href="#i-arrow-right"></use></svg></button></section>
   <section id="answerCard" class="card" hidden aria-label="CoPilot answer">
   <div class="section-head">
     <h2 class="section-title">CoPilot answer</h2>
@@ -147,6 +417,16 @@ svg{display:block}
   <div id="answerSourceLine" class="copilot-answer-source" hidden>
     Source: <a id="answerSource" target="_blank" rel="noopener noreferrer"></a>
   </div>
+</section>
+
+<section id="comparisonCard" class="card" hidden
+         aria-label="Verified product comparison">
+  <div class="section-head">
+    <h2 class="section-title">Verified product comparison</h2>
+  </div>
+  <div id="comparisonProducts" style="overflow-x:auto"></div>
+  <p id="comparisonSummary" class="browser-caption"
+     aria-live="polite"></p>
 </section>
 
 <section id="downloadCard" class="card" hidden
@@ -175,6 +455,19 @@ svg{display:block}
   </p>
 </section>
 
+<section id="imageCard" class="card" hidden aria-label="Verified image">
+  <div class="section-head">
+    <h2 class="section-title" id="imageTitle">Your image is ready to view</h2>
+  </div>
+  <div id="imageList" class="image-grid"></div>
+  <p class="browser-caption">These temporary links expire automatically. The files stay in workspace/media/.</p>
+</section>
+
+<div id="imageViewer" role="dialog" aria-modal="true" aria-label="Full screen image view" hidden>
+  <button id="imageViewerClose" class="btn" type="button">Close</button>
+  <img id="imageViewerImg" alt="">
+</div>
+
 <p class="footer-note">Website CoPilot · Local automation workspace · Browser actions remain subject to confirmation and safety checks</p>
  </main>
 </div>
@@ -196,6 +489,7 @@ let lastActivitySignature='';
 let browserVisibleBusy=false;
 let browserTabsBusy=false;
 let manualActiveTabId=null;
+let previewTabId=null; // null = track the agent's currently observed tab
 const inactive=new Set(['idle','finished','error','cancelled']);
 const phases={idle:'Ready',starting:'Starting',running:'Running',pausing:'Pausing',paused:'Paused',stopping:'Stopping',finished:'Finished',error:'Error',cancelled:'Stopped',approval_request:'Needs approval',approval_confirmation:'Confirm action',human_handover:'Needs your input'};
 const successStatuses=new Set(['verified_complete','persisted_complete','answer_ready','download_ready']);
@@ -203,7 +497,11 @@ function isRunningPhase(phase){return !inactive.has(phase)}
 function showError(message){$('resultCard').className='card result-card danger';$('resultHeading').textContent='Action could not be completed';$('resultDescription').textContent=String(message||'Unknown error');$('resultMeta').textContent='';$('resultCard').scrollIntoView({behavior:'smooth',block:'nearest'})}
 async function post(path,data={}){const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw Error(result.error||'Request failed.');return result}
 function updateControls(){const p=currentState.phase||'idle';const active=isRunningPhase(p);const stopping=p==='stopping';const run=$('runStopToggle');run.disabled=busy||stopping;run.type=active?'button':'submit';$('runButtonLabel').textContent=stopping?'Stopping…':active?'Stop Agent':'Run CoPilot';run.classList.toggle('btn-danger',active);run.classList.toggle('btn-primary',!active);run.querySelector('svg use').setAttribute('href','#i-'+(active?'stop':'play'));const pause=$('pauseResumeToggle');pause.hidden=!(p==='running'||p==='paused');pause.disabled=busy;pause.querySelector('svg use').setAttribute('href','#i-'+(p==='paused'?'play':'pause'));$('pauseButtonLabel').textContent=p==='paused'?'Resume':'Pause';$('status').textContent=phases[p]||p;const dot=$('stageDot');dot.style.background=p==='error'?'#d95a5a':p==='running'?'#3178f6':p==='paused'||currentState.pending?'#e6a044':'#24b47e';$('healthTitle').textContent=currentState.pending?'Needs your input':p==='running'?'Agent working':p==='paused'?'Agent paused':p==='error'?'Agent error':'CoPilot ready';$('healthCaption').textContent=p==='running'?'Executing browser task':p==='paused'?'Manual control available':currentState.pending?'Review the request':'Local agent dashboard';$('healthDot').style.background=currentState.pending?'#e6a044':p==='error'?'#d95a5a':'#24b47e'}
-async function startTask(){if(busy||isRunningPhase(currentState.phase))return;const instruction=$('instruction').value.trim();if(!instruction){$('instruction').focus();return}busy=true;updateControls();try{await post('/api/start',{instruction,startUrl:$('startUrl').value.trim(),maxSteps:Number($('maxSteps').value)});$('resultDetailsBtn').hidden=true;}catch(error){showError(error.message)}finally{busy=false;updateControls()}}
+const HISTORY_KEY='wcp.history',RERUN_KEY='wcp.rerun',HISTORY_LIMIT=100;
+function recordHistory(instruction,startUrl,maxSteps){if(typeof instruction!=='string'||!instruction)return;try{const list=JSON.parse(sessionStorage.getItem(HISTORY_KEY)||'[]');const items=Array.isArray(list)?list:[];items.unshift({instruction,startUrl,maxSteps,time:Date.now()});sessionStorage.setItem(HISTORY_KEY,JSON.stringify(items.slice(0,HISTORY_LIMIT)))}catch(error){}}
+function takeRerun(){try{const raw=sessionStorage.getItem(RERUN_KEY);if(raw===null)return null;sessionStorage.removeItem(RERUN_KEY);const item=JSON.parse(raw);if(!item||typeof item.instruction!=='string'||!item.instruction.trim())return null;return item}catch(error){return null}}
+function applyRerun(item){$('instruction').value=item.instruction;$('startUrl').value=typeof item.startUrl==='string'?item.startUrl:'';if([6,12,30].includes(Number(item.maxSteps)))$('maxSteps').value=String(item.maxSteps);if(busy||isRunningPhase(currentState.phase)){showError('A task is already running. The task was placed in the fields; press Run CoPilot when it has finished.');return}void startTask()}
+async function startTask(){if(busy||isRunningPhase(currentState.phase))return;const instruction=$('instruction').value.trim();if(!instruction){$('instruction').focus();return}busy=true;updateControls();try{const startUrl=$('startUrl').value.trim(),maxSteps=Number($('maxSteps').value);const started=await post('/api/start',{instruction,startUrl,maxSteps});recordHistory(started.instruction,startUrl,maxSteps);$('resultDetailsBtn').hidden=true;}catch(error){showError(error.message)}finally{busy=false;updateControls()}}
 async function stopTask(){if(busy||!isRunningPhase(currentState.phase))return;busy=true;updateControls();try{await post('/api/stop')}catch(error){showError(error.message)}finally{busy=false;updateControls()}}
 $('taskForm').addEventListener('submit',event=>{event.preventDefault();void startTask()});
 $('runStopToggle').addEventListener('click',event=>{if(isRunningPhase(currentState.phase)){event.preventDefault();void stopTask()}});
@@ -222,8 +520,9 @@ function showDialog(dialog){activeDialog=dialog;$('interaction').hidden=false;$(
   showToast(dialog);$('interaction').scrollIntoView({behavior:'smooth',block:'nearest'})
 }
 $('replyForm').addEventListener('submit',event=>{event.preventDefault();const text=$('replyText').value.trim();if(!text)return;$('replyText').value='';void reply({text})});
-function renderActivity(items=[]){const signature=items.length+':'+(items.at(-1)?.at||'')+':'+(items.at(-1)?.text||'');if(signature===lastActivitySignature)return;lastActivitySignature=signature;const area=$('activity');const stick=area.scrollHeight-area.scrollTop-area.clientHeight<55;area.replaceChildren();$('activityCounter').textContent=items.length+' event'+(items.length===1?'':'s');if(!items.length){const empty=document.createElement('div');empty.className='activity-empty';empty.innerHTML=icon('clock','icon lg')+'<span>Actions will appear here as CoPilot works.</span>';area.append(empty);return}for(const item of items){const text=String(item.text||'');const lower=text.toLowerCase();const tone=/completed|verified|successful|finished: verified|finished: persisted/.test(lower)?'success':/error|failed|stagnation|rejected|cancel/.test(lower)?'danger':/approval|handover|manual interaction|required|waiting|paused/.test(lower)?'warning':'';const row=document.createElement('div');row.className='event '+tone;const dot=document.createElement('span');dot.className='event-dot';const body=document.createElement('div');body.className='event-content';const time=document.createElement('div');time.className='event-time';time.textContent=item.at||'';const description=document.createElement('div');description.className='event-text';description.textContent=text;body.append(time,description);row.append(dot,body);area.append(row)}if(stick)area.scrollTop=area.scrollHeight}
-function resultInfo(state){const phase=state.phase||'idle',status=state.result?.status||'';if(state.error||phase==='error')return{tone:'danger',title:'Agent stopped with an error',detail:state.error||state.result?.reason||'Review the task activity for the error.',icon:'alert'};if(phase==='cancelled'||status==='cancelled')return{tone:'warning',title:'Task stopped',detail:'The task was cancelled before verification.',icon:'stop'};if(phase==='finished'){if(status==='answer_ready')return{tone:'success',title:'Answer ready',detail:'CoPilot generated an answer from the webpage.',icon:'check'};if(successStatuses.has(status))return{tone:'success',title:'Task completed successfully',detail:'The requested outcome was verified.',icon:'check'};if(status==='action_outcome_unverified')return{tone:'warning',title:'Task outcome could not be verified',detail:'An action occurred, but the final result could not be confirmed.',icon:'alert'};if(status==='step_limit_reached')return{tone:'warning',title:'Task stopped · Action limit reached',detail:'The action budget was exhausted before completion.',icon:'clock'};if(status==='needs_clarification')return{tone:'warning',title:'Task needs clarification',detail:state.result?.reason||'CoPilot could not interpret this task.',icon:'alert'};return{tone:'danger',title:'Task could not be completed',detail:state.result?.reason||status||'CoPilot stopped without verifying success.',icon:'alert'}}if(state.pending)return{tone:'warning',title:'Your input is needed',detail:'Respond to the highlighted request so CoPilot can continue.',icon:'alert'};if(phase==='paused')return{tone:'',title:'Agent paused',detail:'You can now control Chromium manually or resume automation.',icon:'pause'};if(phase==='running'||phase==='starting'||phase==='pausing'||phase==='stopping')return{tone:'',title:phase==='starting'?'Starting CoPilot…':phase==='stopping'?'Stopping the agent…':phase==='pausing'?'Pausing at a safe checkpoint…':'CoPilot is working',detail:'Agent activity and live browser progress appear above.',icon:'spark'};return{tone:'',title:'Ready when you are',detail:'Describe a task above to begin autonomous browsing.',icon:'spark'}}
+/*tone-start*/function activityTone(text){const lower=String(text||'').toLowerCase();const finished=lower.match(/^agent finished:\s*(\S+)/);if(finished){const status=finished[1];if(successStatuses.has(status))return'success';if(/unverified_completion_claim|rejected|refused|blocked|fail|error|stagnation|cancel/.test(status))return'danger';return'warning'}if(/unsuccessful|unverified|not verified|\bfailed\b|error|stagnation|rejected|cancel|could not/.test(lower))return'danger';if(/\b(?:completed|verified|successful|succeeded)\b/.test(lower))return'success';if(/approval|handover|manual interaction|required|waiting|paused/.test(lower))return'warning';return''}/*tone-end*/
+function renderActivity(items=[]){const signature=items.length+':'+(items.at(-1)?.at||'')+':'+(items.at(-1)?.text||'');if(signature===lastActivitySignature)return;lastActivitySignature=signature;const area=$('activity');const stick=area.scrollHeight-area.scrollTop-area.clientHeight<55;area.replaceChildren();$('activityCounter').textContent=items.length+' event'+(items.length===1?'':'s');if(!items.length){const empty=document.createElement('div');empty.className='activity-empty';empty.innerHTML=icon('clock','icon lg')+'<span>Actions will appear here as CoPilot works.</span>';area.append(empty);return}for(const item of items){const text=String(item.text||'');const lower=text.toLowerCase();const tone=activityTone(text);const row=document.createElement('div');row.className='event '+tone;const dot=document.createElement('span');dot.className='event-dot';const body=document.createElement('div');body.className='event-content';const time=document.createElement('div');time.className='event-time';time.textContent=item.at||'';const description=document.createElement('div');description.className='event-text';description.textContent=text;body.append(time,description);row.append(dot,body);area.append(row)}if(stick)area.scrollTop=area.scrollHeight}
+function resultInfo(state){const phase=state.phase||'idle',status=state.result?.status||'';if(state.error||phase==='error')return{tone:'danger',title:'Agent stopped with an error',detail:state.error||state.result?.reason||'Review the task activity for the error.',icon:'alert'};if(phase==='cancelled'||status==='cancelled')return{tone:'warning',title:'Task stopped',detail:'The task was cancelled before verification.',icon:'stop'};if(phase==='finished'){if(status==='answer_ready')return{tone:'success',title:'Answer ready',detail:'CoPilot generated an answer from the webpage.',icon:'check'};if(successStatuses.has(status))return{tone:'success',title:'Task completed successfully',detail:'The requested outcome was verified.',icon:'check'};if(status==='action_outcome_unverified')return{tone:'warning',title:'Task outcome could not be verified',detail:'An action occurred, but the final result could not be confirmed.',icon:'alert'};if(status==='step_limit_reached')return{tone:'warning',title:'Task stopped · Action limit reached',detail:'The action budget was exhausted. Chromium closes automatically.',icon:'clock'};if(status==='needs_clarification')return{tone:'warning',title:'Task needs clarification',detail:state.result?.reason||'CoPilot could not interpret this task.',icon:'alert'};return{tone:'danger',title:'Task could not be completed',detail:state.result?.reason||status||'CoPilot stopped without verifying success.',icon:'alert'}}if(state.pending)return{tone:'warning',title:'Your input is needed',detail:'Respond to the highlighted request so CoPilot can continue.',icon:'alert'};if(phase==='paused')return{tone:'',title:'Agent paused',detail:'You can now control Chromium manually or resume automation.',icon:'pause'};if(phase==='running'||phase==='starting'||phase==='pausing'||phase==='stopping')return{tone:'',title:phase==='starting'?'Starting CoPilot…':phase==='stopping'?'Stopping the agent…':phase==='pausing'?'Pausing at a safe checkpoint…':'CoPilot is working',detail:'Agent activity and live browser progress appear above.',icon:'spark'};return{tone:'',title:'Ready when you are',detail:'Describe a task above to begin autonomous browsing.',icon:'spark'}}
 function renderResult(state){const info=resultInfo(state);$('resultCard').className='card result-card '+info.tone;$('resultHeading').textContent=info.title;$('resultDescription').textContent=info.detail;$('resultIcon').querySelector('use').setAttribute('href','#i-'+info.icon);const status=state.result?.status||'';const records=state.result?.history?.filter(item=>item.executionCompleted).length??0;$('resultMeta').textContent=status?`Status: ${status} · Executed actions: ${records}`:'';$('resultDetailsBtn').hidden=!state.result&&!state.error;}
 function renderAnswer(state){
   const card=$('answerCard');
@@ -272,6 +571,122 @@ function renderAnswer(state){
   card.hidden=false;
 }
 
+
+function renderComparison(state){
+  const card=$('comparisonCard');
+  const host=$('comparisonProducts');
+  const summary=$('comparisonSummary');
+
+  card.hidden=true;
+  host.replaceChildren();
+  summary.textContent='';
+
+  const data=state.phase==='finished' &&
+    state.result?.status==='verified_complete'
+      ? state.result.comparison : null;
+
+  if(
+    data?.verified!==true ||
+    data.mode!=='named_products' ||
+    !Array.isArray(data.products) ||
+    data.products.length!==2 ||
+    typeof data.difference!=='string' ||
+    typeof data.tied!=='boolean'
+  ) return;
+
+  const products=[];
+
+  for(const item of data.products){
+    if(
+      typeof item.title!=='string' || !item.title.trim() ||
+      typeof item.price!=='string' ||
+      typeof item.availability!=='string'
+    ) return;
+
+    let url;
+    try{
+      url=new URL(item.url);
+      if(
+        !['https:','http:'].includes(url.protocol) ||
+        url.username || url.password
+      ) return;
+    }catch{
+      return;
+    }
+
+    products.push({...item,source:url.href});
+  }
+
+  const table=document.createElement('table');
+  table.style.width='100%';
+  table.style.borderCollapse='collapse';
+  table.style.textAlign='left';
+  table.setAttribute(
+    'aria-label','Verified product price comparison'
+  );
+
+  const head=document.createElement('thead');
+  const headingRow=document.createElement('tr');
+
+  for(const label of ['Product','Price','Availability']){
+    const th=document.createElement('th');
+    th.textContent=label;
+    th.scope='col';
+    th.style.padding='10px 8px';
+    th.style.borderBottom='1px solid #d5dce5';
+    headingRow.append(th);
+  }
+
+  head.append(headingRow);
+  table.append(head);
+
+  const body=document.createElement('tbody');
+
+  for(const product of products){
+    const tr=document.createElement('tr');
+    const title=document.createElement('td');
+    const price=document.createElement('td');
+    const stock=document.createElement('td');
+
+    const link=document.createElement('a');
+    link.href=product.source;
+    link.target='_blank';
+    link.rel='noopener noreferrer';
+    link.textContent=product.title;
+
+    title.append(link);
+    price.textContent=product.price;
+    stock.textContent=product.availability;
+
+    for(const td of [title,price,stock]){
+      td.style.padding='12px 8px';
+      td.style.borderBottom='1px solid #e5e9f0';
+      tr.append(td);
+    }
+
+    body.append(tr);
+  }
+
+  table.append(body);
+  host.append(table);
+
+  summary.textContent=data.tied
+    ? 'Both products have the same verified price.'
+    : 'Cheaper: '+data.cheaperTitle+
+      ' · Difference: '+data.difference;
+
+  card.hidden=false;
+}
+
+/*img-start*/function validImageDelivery(item,now){return !!item&&item.verified===true&&(item.kind==='image'||item.kind==='screenshot')&&typeof item.fileName==='string'&&item.fileName.length>0&&item.fileName.length<=160&&!/[\/\\\u0000-\u001f\u007f<>:"|?*]/.test(item.fileName)&&['png','jpg','gif','webp','bmp'].includes(item.type)&&Number.isSafeInteger(item.bytes)&&item.bytes>=100&&item.bytes<=25*1024*1024&&/^[a-f0-9]{64}$/i.test(String(item.sha256||''))&&/^\/api\/media\/[a-f0-9]{48}$/.test(String(item.viewUrl||''))&&/^\/api\/media\/[a-f0-9]{48}\/download$/.test(String(item.downloadUrl||''))&&Number.isSafeInteger(item.expiresAt)&&item.expiresAt>now}/*img-end*/
+function openImageViewer(url,name){const box=$('imageViewer');const img=$('imageViewerImg');img.src=url;img.alt=name;box.hidden=false;try{if(box.requestFullscreen)box.requestFullscreen().then(()=>{if(box.hidden&&document.fullscreenElement)document.exitFullscreen().catch(()=>{})},()=>{})}catch{}}
+function hideImageViewer(){$('imageViewer').hidden=true;$('imageViewerImg').removeAttribute('src')}
+function closeImageViewer(){if(!document.fullscreenElement){hideImageViewer();return}let done=false;const finish=()=>{if(!done){done=true;hideImageViewer()}};try{document.exitFullscreen().then(finish,finish)}catch{finish()}setTimeout(finish,600)}
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('imageViewer').hidden)closeImageViewer()});
+$('imageViewerClose').addEventListener('click',closeImageViewer);
+$('imageViewer').addEventListener('click',event=>{if(event.target===$('imageViewer'))closeImageViewer()});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&!$('imageViewer').hidden)hideImageViewer();else if(document.fullscreenElement&&$('imageViewer').hidden){try{document.exitFullscreen().catch(()=>{})}catch{}}});
+function renderImages(state){const card=$('imageCard');const list=$('imageList');const now=Date.now();const items=state.phase==='finished'&&state.result?.status==='verified_complete'&&Array.isArray(state.result.images)?state.result.images.filter(item=>validImageDelivery(item,now)).slice(0,6):[];const signature=items.map(item=>item.viewUrl).join('|');if(card.dataset.signature===signature&&(items.length>0)===!card.hidden)return;card.dataset.signature=signature;list.replaceChildren();if(!items.length){card.hidden=true;return}$('imageTitle').textContent=items.every(item=>item.kind==='screenshot')?(items.length===1?'Your screenshot is ready to view':'Your screenshots are ready to view'):(items.length===1?'Your image is ready to view':'Your images are ready to view');for(const item of items){const box=document.createElement('div');box.className='image-item';const img=document.createElement('img');img.alt=item.fileName;img.src=item.viewUrl;const name=document.createElement('div');name.className='image-name';name.textContent=item.fileName;const meta=document.createElement('div');meta.className='image-meta';meta.textContent=(item.bytes/1024).toFixed(1)+' KB \u00b7 '+item.type.toUpperCase()+(item.width&&item.height?' \u00b7 '+item.width+'\u00d7'+item.height:'');const actions=document.createElement('div');actions.className='image-actions';const view=document.createElement('button');view.type='button';view.className='btn';view.textContent='Full Screen View';view.addEventListener('click',()=>openImageViewer(item.viewUrl,item.fileName));const link=document.createElement('a');link.className='btn btn-primary';link.textContent='Download Image';link.setAttribute('href',item.downloadUrl);link.setAttribute('download',item.fileName);link.rel='noreferrer';actions.append(view,link);box.append(img,name,meta,actions);list.append(box)}card.hidden=false}
 function renderDownload(state){
   const card=$('downloadCard');
   const filename=$('downloadFilename');
@@ -329,14 +744,367 @@ function renderDownload(state){
   card.hidden=false;
 }
 
+
+
+const COPILOT_TREE_NS='http://www.w3.org/2000/svg';
+let copilotTreeScale=1;
+let copilotTreeWidth=1000;
+let copilotTreeHeight=550;
+let copilotTreePriorOverflow='';
+
+function treeSvg(parent,tag,attributes={},content=null){
+  const element=document.createElementNS(COPILOT_TREE_NS,tag);
+  for(const [key,value] of Object.entries(attributes))
+    element.setAttribute(key,String(value));
+  if(content!==null)element.textContent=String(content);
+  parent.append(element);
+  return element;
+}
+
+function treeShort(value,max=30){
+  const text=String(value??'');
+  return text.length>max?text.slice(0,max-1)+'…':text;
+}
+
+function treeUrl(value){
+  try {
+    const url=new URL(value);
+    return url.origin+url.pathname;
+  } catch {
+    return String(value??'');
+  }
+}
+
+function treeZoomApply(){
+  const svg=$('actionTreeSvg');
+  svg.style.width=Math.round(copilotTreeWidth*copilotTreeScale)+'px';
+  svg.style.height=Math.round(copilotTreeHeight*copilotTreeScale)+'px';
+  $('treeZoomLabel').textContent=
+    Math.round(copilotTreeScale*100)+'%';
+}
+
+function treeZoomFit(){
+  const viewport=$('actionTreeContent');
+  copilotTreeScale=Math.max(.2,Math.min(
+    1.3,(viewport.clientWidth-35)/copilotTreeWidth
+  ));
+  treeZoomApply();
+}
+
+function treePopupClose(){
+  $('actionTreePanel').hidden=true;
+  document.body.style.overflow=copilotTreePriorOverflow;
+  $('visualizeActionsBtn').focus({preventScroll:true});
+}
+
+function paintRecordedTree(graph){
+  const svg=$('actionTreeSvg');
+  svg.replaceChildren();
+
+  const recordedNodes=Array.isArray(graph?.nodes)
+    ?graph.nodes:[];
+  const recordedEdges=Array.isArray(graph?.edges)
+    ?graph.edges:[];
+
+  $('treePopupSummary').textContent=
+    recordedNodes.length+' observed page states · '+
+    recordedEdges.length+' action edges · '+
+    recordedEdges.filter(e=>e.operation==='back').length+
+    ' backtracks';
+
+  if(!recordedNodes.length)return;
+
+  const nodes=recordedNodes.map(node=>({...node}));
+  const edges=recordedEdges.map(edge=>({...edge}));
+  const nodeById=new Map(nodes.map(node=>[node.id,node]));
+
+  // Actions without a subsequent observed page are attempt leaves,
+  // not imaginary website pages.
+  for(const edge of edges){
+    if(edge.operation==='back'||edge.to||
+       !nodeById.has(edge.from))continue;
+
+    const trial={
+      id:'trial-'+edge.id,
+      parentId:edge.from,
+      title:(edge.operation||'action')+' · '+
+        (edge.label||edge.ref||'unknown'),
+      url:'',
+      trial:true,
+      status:edge.status||'unknown',
+      verified:false
+    };
+    nodes.push(trial);
+    nodeById.set(trial.id,trial);
+    edge.to=trial.id;
+  }
+
+  const children=new Map();
+  for(const node of nodes){
+    if(node.parentId&&nodeById.has(node.parentId)){
+      if(!children.has(node.parentId))
+        children.set(node.parentId,[]);
+      children.get(node.parentId).push(node.id);
+    }
+  }
+
+  const positions=new Map();
+  let leafIndex=0;
+  let maximumDepth=0;
+
+  function layout(id,depth,visited=new Set()){
+    if(positions.has(id))return positions.get(id).x;
+    if(visited.has(id))return null;
+
+    const next=new Set(visited);
+    next.add(id);
+    const xs=[];
+
+    for(const child of children.get(id)||[]){
+      const x=layout(child,depth+1,next);
+      if(x!==null)xs.push(x);
+    }
+
+    const x=xs.length
+      ?(xs[0]+xs.at(-1))/2
+      :170+leafIndex++*290;
+
+    positions.set(id,{x,y:105+depth*170});
+    maximumDepth=Math.max(maximumDepth,depth);
+    return x;
+  }
+
+  const roots=nodes.filter(node=>
+    !node.parentId||!nodeById.has(node.parentId)
+  );
+  for(const root of roots)layout(root.id,0);
+  for(const node of nodes)
+    if(!positions.has(node.id))layout(node.id,0);
+
+  const values=[...positions.values()];
+  const smallest=Math.min(...values.map(point=>point.x));
+  const largest=Math.max(...values.map(point=>point.x));
+
+  copilotTreeWidth=Math.max(1000,largest-smallest+350);
+  copilotTreeHeight=Math.max(550,maximumDepth*170+230);
+
+  const shift=(copilotTreeWidth-(largest-smallest))/2-smallest;
+  for(const point of positions.values())point.x+=shift;
+
+  svg.setAttribute('viewBox',
+    `0 0 ${copilotTreeWidth} ${copilotTreeHeight}`);
+
+  const definitions=treeSvg(svg,'defs');
+  for(const [name,color] of [
+    ['normal','#3978c6'],
+    ['back','#d17c18'],
+    ['failed','#b65353']
+  ]){
+    const marker=treeSvg(definitions,'marker',{
+      id:'copilot-arrow-'+name,
+      markerWidth:10,markerHeight:10,
+      refX:9,refY:5,orient:'auto',
+      markerUnits:'userSpaceOnUse'
+    });
+    treeSvg(marker,'path',{
+      d:'M0 0 L10 5 L0 10 Z',fill:color
+    });
+  }
+
+  const WIDTH=230;
+  const HEIGHT=84;
+  let backLane=0;
+
+  // Draw directional edges behind page nodes.
+  for(const edge of edges){
+    const from=positions.get(edge.from);
+    const to=positions.get(edge.to);
+    if(!from||!to)continue;
+
+    const back=edge.operation==='back';
+    const failed=/failed|unconfirmed|not_executed/.test(
+      edge.status||''
+    );
+    const color=back?'#d17c18':
+      failed?'#b65353':'#3978c6';
+    const marker=back?'back':failed?'failed':'normal';
+
+    let d;
+    let labelX;
+    let labelY;
+
+    if(back){
+      const lane=Math.min(from.x,to.x)-165-35*backLane++;
+      d=`M ${from.x-WIDTH/2} ${from.y}
+         C ${lane} ${from.y},
+           ${lane} ${to.y},
+           ${to.x-WIDTH/2} ${to.y}`;
+      labelX=lane+26;
+      labelY=(from.y+to.y)/2;
+    }else{
+      const sy=from.y+HEIGHT/2;
+      const ty=to.y-HEIGHT/2;
+      d=`M ${from.x} ${sy}
+         C ${from.x} ${sy+58},
+           ${to.x} ${ty-58},
+           ${to.x} ${ty}`;
+      labelX=(from.x+to.x)/2;
+      labelY=(sy+ty)/2;
+    }
+
+    treeSvg(svg,'path',{
+      d,fill:'none',stroke:color,'stroke-width':2.4,
+      'stroke-dasharray':back?'8 6':failed?'5 5':'none',
+      'marker-end':`url(#copilot-arrow-${marker})`,
+      'data-tree-edge':edge.id
+    });
+
+    const text=treeShort(
+      back?'↶ Backtrack':
+      (edge.operation||'action')+' · '+
+      (edge.label||edge.ref||'target'),26
+    );
+    const labelWidth=Math.max(85,text.length*6.8+18);
+
+    treeSvg(svg,'rect',{
+      x:labelX-labelWidth/2,y:labelY-14,
+      width:labelWidth,height:25,rx:7,
+      fill:'#ffffff',stroke:color,'stroke-opacity':.45
+    });
+    treeSvg(svg,'text',{
+      x:labelX,y:labelY+3,
+      'text-anchor':'middle',
+      'font-size':11,'font-weight':600,fill:color
+    },text);
+  }
+
+  // Real observed states are separate boxes, connected by edges.
+  for(const node of nodes){
+    const point=positions.get(node.id);
+    if(!point)continue;
+
+    const trial=node.trial===true;
+    const verified=node.verified===true;
+    const color=verified?'#15803d':
+      trial?'#b65353':'#3978c6';
+
+    const group=treeSvg(svg,'g',{
+      'data-tree-node':node.id,
+      style:'cursor:pointer'
+    });
+
+    treeSvg(group,'rect',{
+      x:point.x-WIDTH/2,y:point.y-HEIGHT/2,
+      width:WIDTH,height:HEIGHT,rx:12,
+      fill:verified?'#eaf8ee':
+        trial?'#fff3f1':'#ffffff',
+      stroke:color,'stroke-width':verified?3:2,
+      'stroke-dasharray':trial?'5 4':'none'
+    });
+
+    treeSvg(group,'text',{
+      x:point.x-WIDTH/2+13,
+      y:point.y-HEIGHT/2+25,
+      fill:'#172b4d','font-size':13,
+      'font-weight':700
+    },treeShort(node.title,30));
+
+    treeSvg(group,'text',{
+      x:point.x-WIDTH/2+13,
+      y:point.y-HEIGHT/2+49,
+      fill:'#64748b','font-size':10
+    },treeShort(
+      trial?'Attempt: '+node.status:treeUrl(node.url),36
+    ));
+
+    treeSvg(group,'text',{
+      x:point.x-WIDTH/2+13,
+      y:point.y-HEIGHT/2+69,
+      fill:color,'font-size':10,
+      'font-weight':650
+    },verified?'✓ VERIFIED GOAL':
+      trial?'ACTION ATTEMPT':'OBSERVED PAGE');
+
+    treeSvg(group,'title',{},node.title);
+
+    group.addEventListener('click',()=>{
+      $('treePopupFooter').textContent=
+        (trial?'Action attempt: ':'Observed page: ')+
+        node.title+
+        (node.url?' · '+treeUrl(node.url):'')+
+        (verified?' · Goal verified':'');
+    });
+  }
+
+  treeZoomFit();
+}
+
+function renderActionTree(state){
+  const tree=state.actionTree;
+  const finished=['finished','error','cancelled']
+    .includes(state.phase);
+
+  const enabled=finished&&
+    Array.isArray(tree?.nodes)&&tree.nodes.length>0;
+
+  $('visualizeActionsBtn').disabled=!enabled;
+  $('visualizeActionsBtn').setAttribute(
+    'aria-disabled',String(!enabled)
+  );
+
+  if(!enabled&&!$('actionTreePanel').hidden)
+    treePopupClose();
+}
+
+$('visualizeActionsBtn').addEventListener('click',()=>{
+  if($('visualizeActionsBtn').disabled)return;
+
+  const popup=$('actionTreePanel');
+  document.body.appendChild(popup);
+  copilotTreePriorOverflow=document.body.style.overflow;
+  document.body.style.overflow='hidden';
+  popup.hidden=false;
+
+  paintRecordedTree(currentState.actionTree);
+  $('treePopupClose').focus();
+});
+
+$('treePopupClose').addEventListener(
+  'click',treePopupClose
+);
+
+$('actionTreePanel').addEventListener('click',event=>{
+  if(event.target===$('actionTreePanel'))
+    treePopupClose();
+});
+
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!$('actionTreePanel').hidden){
+    event.preventDefault();
+    treePopupClose();
+  }
+});
+
+$('treeZoomIn').addEventListener('click',()=>{
+  copilotTreeScale=Math.min(2.5,copilotTreeScale*1.25);
+  treeZoomApply();
+});
+
+$('treeZoomOut').addEventListener('click',()=>{
+  copilotTreeScale=Math.max(.2,copilotTreeScale/1.25);
+  treeZoomApply();
+});
+
+$('treeFit').addEventListener('click',treeZoomFit);
+
 function renderOwnership(state){const phase=state.phase||'idle';let title='Ready for a task',detail='CoPilot will open and manage Chromium after you start.';if(state.pending){title='Attention required';detail='CoPilot is waiting for you to approve or complete a manual step.'}else if(phase==='running'){title='CoPilot is controlling the browser';detail='Pause at a safe checkpoint before interacting manually.'}else if(phase==='paused'){title='Manual control available';detail='Use the preview controls below or open the real Chromium window.'}else if(phase==='starting'){title='Preparing Chromium';detail='The browser workspace is starting.'}else if(phase==='finished'){title='Agent run ended';detail=state.result?.status==='answer_ready'?'The requested explanation is ready below.':successStatuses.has(state.result?.status)?'The task outcome was verified.':'See the task result below for the completion status.'}else if(phase==='error'){title='Browser workflow interrupted';detail='Review the error under Task result.'}else if(phase==='cancelled'){title='Agent stopped';detail='The automated run was cancelled.'}$('ownerTitle').textContent=title;$('ownerDescription').textContent=detail}
-function renderState(state){currentState=state;updateControls();renderActivity(state.activity||[]);renderResult(state);renderAnswer(state);renderDownload(state);renderOwnership(state);updateVisibility();$('copilotManualPanel').hidden=state.phase!=='paused';$('preview').style.cursor=state.phase==='paused'?'crosshair':'zoom-in';if(state.pending){if(activeDialog?.id!==state.pending.id)showDialog(state.pending);else showToast(state.pending)}else if(activeDialog)clearPending();if(state.url&&!$('currentUrl').dataset.hasTabs)$('currentUrl').textContent=safeUrl(state.url)}
+function renderState(state){currentState=state;updateControls();renderActivity(state.activity||[]);renderActionTree(state);renderResult(state);renderAnswer(state);renderComparison(state);renderDownload(state);renderImages(state);renderOwnership(state);updateVisibility();$('copilotManualPanel').hidden=state.phase!=='paused';$('preview').style.cursor=state.phase==='paused'?'crosshair':'zoom-in';if(state.pending){if(activeDialog?.id!==state.pending.id)showDialog(state.pending);else showToast(state.pending)}else if(activeDialog)clearPending();if(state.url&&!$('currentUrl').dataset.hasTabs)$('currentUrl').textContent=safeUrl(state.url)}
 function safeUrl(value){try{const u=new URL(value);return u.origin+u.pathname}catch{return value||'No browser page opened'}}
-function renderTabs(data){currentTabs=data;const tabs=Array.isArray(data.tabs)?data.tabs:[];const wrapper=$('browserTabPanel');wrapper.replaceChildren();$('tabStatus').textContent=tabs.length?`${tabs.length} tab${tabs.length===1?'':'s'}`:'Awaiting a task';$('currentUrl').dataset.hasTabs=tabs.length?'yes':'';if(!tabs.length){$('currentUrl').textContent=currentState.url?safeUrl(currentState.url):'No browser page opened';return}for(const tab of tabs){const chip=document.createElement('div');chip.className='tab'+(tab.active?' active':'');chip.title=(tab.title||'Tab')+' · '+(tab.url||'');const dot=document.createElement('span');dot.textContent=tab.active?'●':'◦';dot.style.color=tab.active?'#3983f1':'#a7b7c9';const title=document.createElement('span');title.className='tab-title';title.textContent=(tab.index||'')+'. '+(tab.title||'Untitled');chip.append(dot,title);wrapper.append(chip)}const active=tabs.find(tab=>tab.active);$('currentUrl').textContent=active?.url || (tabs.length===1 ? (tabs[0].url||'Browser tab open') : (currentState.url ? safeUrl(currentState.url) : 'Agent tab not identified'));manualActiveTabId=active?.id||null}
+function renderTabs(data){currentTabs=data;const tabs=Array.isArray(data.tabs)?data.tabs:[];const wrapper=$('browserTabPanel');wrapper.replaceChildren();$('tabStatus').textContent=tabs.length?`${tabs.length} tab${tabs.length===1?'':'s'}`:'Awaiting a task';$('currentUrl').dataset.hasTabs=tabs.length?'yes':'';if(previewTabId&&!tabs.some(tab=>tab.id===previewTabId))previewTabId=null;if(!tabs.length){manualActiveTabId=null;$('currentUrl').textContent='No browser page opened';return}const active=tabs.find(tab=>tab.active);const chosen=tabs.find(tab=>tab.id===previewTabId)||active;for(const tab of tabs){const chip=document.createElement('button');chip.type='button';chip.className='tab'+(tab.id===chosen?.id?' active':'');chip.title=(tab.title||'Tab')+' · '+(tab.url||'')+(tab.active?' · Agent tab':' · Preview only');chip.setAttribute('aria-label','Preview '+(tab.title||'Tab'));chip.setAttribute('aria-pressed',String(tab.id===chosen?.id));const dot=document.createElement('span');dot.textContent=tab.active?'●':'◦';dot.style.color=tab.active?'#3983f1':'#a7b7c9';const title=document.createElement('span');title.className='tab-title';title.textContent=(tab.index||'')+'. '+(tab.title||'Untitled');chip.append(dot,title);chip.addEventListener('click',()=>{previewTabId=tab.id;renderTabs(currentTabs);void refreshScreenshot()});wrapper.append(chip)}$('currentUrl').textContent=chosen?.url || 'Browser tab open';manualActiveTabId=active?.id||null}
 async function refreshTabs(){if(browserTabsBusy)return;browserTabsBusy=true;try{const response=await fetch('/api/browser-tabs',{cache:'no-store'});if(response.ok)renderTabs(await response.json())}catch{/* Browser tab polling can fail transiently. */}finally{browserTabsBusy=false}}
 function updateVisibility(){const state=currentState;const active=state.phase!=='idle'&&state.phase!=='starting'&&state.phase!=='cancelled'&&state.phase!=='error';$('browserVisibilityBtn').hidden=!active;$('browserVisibilityBtn').disabled=browserVisibleBusy||state.browserControlAvailable===false;$('browserVisibilityLabel').textContent=state.browserVisible?'Hide real browser':'Show real browser';$('browserVisibilityNote').textContent=state.browserControlAvailable===false?'Chromium window control is unavailable on this setup.':''}
 $('browserVisibilityBtn').addEventListener('click',async()=>{if(browserVisibleBusy)return;browserVisibleBusy=true;updateVisibility();try{await post('/api/browser-visibility',{visible:!currentState.browserVisible})}catch(error){$('browserVisibilityNote').textContent=error.message}finally{browserVisibleBusy=false;updateVisibility()}});
-async function refreshScreenshot(){if(screenshotBusy)return;screenshotBusy=true;try{const response=await fetch('/api/screenshot?t='+Date.now(),{cache:'no-store'});if(!response.ok){$('preview').dataset.snapshotId='';if(!currentState.url&&!currentTabs.tabs?.length){$('preview').style.display='none';$('browserEmpty').hidden=false;$('zoomBtn').hidden=true}return}const ticket=response.headers.get('X-CoPilot-Snapshot')||'';const url=URL.createObjectURL(await response.blob());const img=$('preview');img.dataset.snapshotId='';img.src=url;try{await img.decode();if(img.src===url){img.dataset.snapshotId=ticket;img.style.display='block';$('browserEmpty').hidden=true;$('zoomBtn').hidden=false;lastScreenshotLoadedAt=performance.now()}if(previousScreenshotUrl)URL.revokeObjectURL(previousScreenshotUrl);previousScreenshotUrl=url}catch{URL.revokeObjectURL(url)}}catch{/* Keep last good screenshot. */}finally{screenshotBusy=false}}
+async function refreshScreenshot(){if(screenshotBusy)return;screenshotBusy=true;try{const selected=previewTabId?'&tabId='+encodeURIComponent(previewTabId):'';const response=await fetch('/api/screenshot?t='+Date.now()+selected,{cache:'no-store'});if(!response.ok){$('preview').dataset.snapshotId='';if(!currentTabs.tabs?.length){$('preview').style.display='none';$('browserEmpty').hidden=false;$('zoomBtn').hidden=true}return}const ticket=response.headers.get('X-CoPilot-Snapshot')||'';const url=URL.createObjectURL(await response.blob());const img=$('preview');img.dataset.snapshotId='';img.src=url;try{await img.decode();if(img.src===url){img.dataset.snapshotId=ticket;img.style.display='block';$('browserEmpty').hidden=true;$('zoomBtn').hidden=false;lastScreenshotLoadedAt=performance.now()}if(previousScreenshotUrl)URL.revokeObjectURL(previousScreenshotUrl);previousScreenshotUrl=url}catch{URL.revokeObjectURL(url)}}catch{/* Keep last good screenshot. */}finally{screenshotBusy=false}}
 function openZoom(){const img=$('preview');if(currentState.phase==='paused'||!img.naturalWidth)return;$('zoomImage').src=img.currentSrc||img.src;$('zoomOverlay').hidden=false}
 function closeZoom(){$('zoomOverlay').hidden=true}
 $('zoomBtn').addEventListener('click',openZoom);$('zoomClose').addEventListener('click',closeZoom);$('zoomOverlay').addEventListener('click',event=>{if(event.target===$('zoomOverlay'))closeZoom()});document.addEventListener('keydown',event=>{if(event.key==='Escape')closeZoom()});
@@ -347,9 +1115,118 @@ for(const button of document.querySelectorAll('[data-manual-key]'))button.addEve
 function screenshotPoint(event){const el=$('preview'),rect=el.getBoundingClientRect();if(!el.naturalWidth||!el.naturalHeight||!rect.width||!rect.height)return null;const ratio=el.naturalWidth/el.naturalHeight;const width=Math.min(rect.width,rect.height*ratio),height=Math.min(rect.height,rect.width/ratio);const left=rect.left+(rect.width-width)/2,top=rect.top+(rect.height-height)/2;const xRatio=(event.clientX-left)/width,yRatio=(event.clientY-top)/height;if(xRatio<0||xRatio>1||yRatio<0||yRatio>1)return null;return{xRatio,yRatio}}
 $('preview').addEventListener('click',event=>{if(currentState.phase!=='paused'){openZoom();return}event.preventDefault();const age=performance.now()-lastScreenshotLoadedAt;if(!lastScreenshotLoadedAt||age>3000){$('manualStatus').textContent='Screenshot is outdated. Waiting for a fresh image.';return}const point=screenshotPoint(event);if(!point)return;const snapshotId=$('preview').dataset.snapshotId;if(!snapshotId){$('manualStatus').textContent='Waiting for a verified browser screenshot.';return}void sendManual('click',{...point,snapshotId})});
 $('preview').addEventListener('wheel',event=>{if(currentState.phase!=='paused')return;event.preventDefault();void sendManual('scroll',{deltaX:event.deltaX,deltaY:event.deltaY})},{passive:false});
-$('resultDetailsBtn').addEventListener('click',()=>{$('activityCard').scrollIntoView({behavior:'smooth',block:'start'})});
+
+let detailsRequestId=0;
+let detailsPreviousOverflow='';
+
+function closeRunDetails(){
+  detailsRequestId++;
+  $('runDetailsOverlay').hidden=true;
+  document.body.style.overflow=detailsPreviousOverflow;
+  $('resultDetailsBtn').focus({preventScroll:true});
+}
+
+async function loadRunDetails(){
+  const id=++detailsRequestId;
+
+  $('runDetailsLoading').hidden=false;
+  $('runDetailsError').hidden=true;
+  $('runDetailsRetry').hidden=true;
+  $('runDetailsOutput').hidden=true;
+  $('runDetailsStatus').textContent='Generating explanation…';
+
+  try {
+    const data=await post('/api/run-explanation');
+
+    if(id!==detailsRequestId||
+       $('runDetailsOverlay').hidden)return;
+
+    $('runDetailsStatus').textContent=
+      'Recorded status: '+data.status+
+      ' · Model: '+data.model;
+
+    $('runDetailsWhat').textContent=
+      data.explanation.whatHappened;
+    const runFailed=data.outcome==='failed';
+    $('runDetailsWhyHeading').textContent=
+      runFailed?'Why it failed':'Why it passed';
+    $('runDetailsWhy').textContent=
+      data.explanation.why||data.explanation.whyOutcome||'';
+    const tryText=runFailed?(data.explanation.whatToTry||''):'';
+    $('runDetailsTry').textContent=tryText;
+    $('runDetailsTry').hidden=!tryText;
+    $('runDetailsTryHeading').hidden=!tryText;
+
+    const list=$('runDetailsActions');
+    list.replaceChildren();
+
+    for(const action of data.actions||[]){
+      const li=document.createElement('li');
+      li.textContent=
+        action.operation+' · '+action.target+
+        (action.to?' → '+action.to:'')+
+        ' ('+action.outcome+')';
+      list.append(li);
+    }
+
+    if(!list.children.length){
+      const li=document.createElement('li');
+      li.textContent='No browser actions were recorded.';
+      list.append(li);
+    }
+
+    $('runDetailsLoading').hidden=true;
+    $('runDetailsOutput').hidden=false;
+  } catch(error) {
+    if(id!==detailsRequestId||
+       $('runDetailsOverlay').hidden)return;
+
+    $('runDetailsLoading').hidden=true;
+    $('runDetailsError').hidden=false;
+    $('runDetailsError').textContent=error.message;
+    $('runDetailsRetry').hidden=false;
+    $('runDetailsStatus').textContent=
+      'Explanation unavailable · Run status unchanged';
+  }
+}
+
+$('resultDetailsBtn').addEventListener('click',()=>{
+  if(!currentState.result&&!currentState.error)return;
+
+  const overlay=$('runDetailsOverlay');
+  document.body.appendChild(overlay);
+
+  detailsPreviousOverflow=document.body.style.overflow;
+  document.body.style.overflow='hidden';
+
+  overlay.hidden=false;
+  $('runDetailsClose').focus();
+  void loadRunDetails();
+});
+
+$('runDetailsClose').addEventListener(
+  'click',closeRunDetails
+);
+
+$('runDetailsRetry').addEventListener(
+  'click',()=>void loadRunDetails()
+);
+
+$('runDetailsOverlay').addEventListener('click',event=>{
+  if(event.target===$('runDetailsOverlay'))
+    closeRunDetails();
+});
+
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape' &&
+     !$('runDetailsOverlay').hidden){
+    event.preventDefault();
+    closeRunDetails();
+  }
+});
+
 const stream=new EventSource('/api/events');stream.onmessage=event=>{try{renderState(JSON.parse(event.data));$('connectionLabel').textContent='Local workspace'}catch(error){console.error('Invalid agent state',error)}};stream.onerror=()=>{$('connectionLabel').textContent='Reconnecting…'};
-fetch('/api/state',{cache:'no-store'}).then(response=>response.json()).then(renderState).catch(()=>{});
+{const rerunItem=takeRerun();fetch('/api/state',{cache:'no-store'}).then(response=>response.json()).then(renderState).catch(()=>{}).then(()=>{if(rerunItem)applyRerun(rerunItem)})}
 void refreshTabs();void refreshScreenshot();setInterval(refreshTabs,2500);setInterval(refreshScreenshot,1800);
 </script>
 </body>

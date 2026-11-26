@@ -1,8 +1,10 @@
-import { buildRepositoryDestinationGoal } from "./repository-result-planner.js";
+import {reconcileExplicitRadioGoal31E} from "./form-radio-identity-31E.js";
+import { validateTaskContract } from "./task-contract.js";
 import {
   validateGoalSchema
 } from "./goal-schema-validator.js";
-import { deriveExplicitOutcomeGoal } from "./explicit-goal-repair.js";
+import { deriveExplicitOutcomeGoal, extractExplicitCheckboxConditions } from "./explicit-goal-repair.js";
+import { checkExplicitFormGoalCoverage } from "./form-goal-coverage.js";
 
 const OLLAMA_URL = "http://127.0.0.1:11434/api/generate";
 const MODEL = process.env.COPILOT_OLLAMA_MODEL || "qwen3:4b";
@@ -32,7 +34,7 @@ function extractJSON(text) {
   }
 }
 
-function validateTask(task) {
+function validateTask(task, {formControls=[]} = {}) {
   if (
     !task ||
     typeof task !== "object" ||
@@ -69,12 +71,12 @@ function validateTask(task) {
       throw new Error("Category cannot be empty.");
     }
 
-    return {
+    return validateTaskContract({
       type: "product_comparison",
       startUrl: url.href,
       category: task.category.trim(),
       limit: task.limit
-    };
+    });
   }
 
   if (task.type === "browser_goal") {
@@ -115,12 +117,12 @@ function validateTask(task) {
       startUrl = parsed.href;
     }
 
-    return {
+    return validateTaskContract({
       type: "browser_goal",
       instruction: task.instruction.trim(),
       goal: validateGoalSchema(normalizeGeneratedGoal(task.goal)),
       ...(startUrl ? { startUrl } : {})
-    };
+    }, {formControls});
   }
 
   throw new Error(
@@ -290,17 +292,33 @@ function explicitVisibleFormGoal(instruction) {
   return { type: "visible_form" };
 }
 
+// Source-grounded repair for one explicit search -> named article -> answer flow.
+// The search-box value is an INTERMEDIATE action, not the completed task.
+// Accept only a concrete, single person name and a subsequent explicit article
+// read request. Do not synthesize arbitrary destinations or search URLs.
+function explicitSearchArticleDestination(instruction) {
+  const positive = String(instruction || "").replace(
+    /\b(?:do\s+not|don't|never)\b[^.!?;\n]*/gi, ""
+  );
+  const match = positive.match(
+    /\buse\s+[^.!?;\n]{1,80}?\bsearch\s+to\s+find\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*[.!?]/i
+  );
+  if (!match || !match[1].split(/\s+/).every(word => /^[A-Z][a-z]+$/.test(word)) || !/\bopen\s+(?:his|her|their)\s+(?:[a-z]+\s+){0,2}article\s+and\s+(?:identify|explain|describe|summari[sz]e|read|report)\b/i.test(positive)) {
+    return null;
+  }
+  if (/\b(?:submit|upload|download|purchase|checkout|delete|publish|log\s*in|sign\s*in)\b/i.test(positive)) {
+    return null;
+  }
+  return {type: "page_destination", identity: match[1]};
+}
+
 function enforceNavigationGoal(goal, instruction) {
   const text = String(instruction);
+  const requestedArticle = explicitSearchArticleDestination(text);
+  if (requestedArticle) return requestedArticle;
   const visibleForm = explicitVisibleFormGoal(text);
   if (visibleForm) return visibleForm;
 
-
-  // For simple repository navigation, derive goal constraints from
-  // the user's instruction rather than an invented model heading.
-  const repositoryGoal = buildRepositoryDestinationGoal(text);
-
-  if (repositoryGoal) return repositoryGoal;
 
   const navigationOnly = navigationOnlyDestination(goal, text);
   if (navigationOnly) return navigationOnly;
@@ -456,6 +474,56 @@ function hasDestinationEvidence(goal) {
       typeof value === "string" &&
       value.trim().length > 0
   );
+}
+
+
+// Deterministically preserve two explicitly named comparison targets.
+// The existing page URL is the trusted starting location; no new
+// website address is invented by this parser.
+export function interpretNamedComparisonRequest(
+  instruction, currentUrl
+) {
+  const text = String(instruction ?? "");
+
+  if (
+    !/\bcompare\b/i.test(text) ||
+    !/\b(?:books?|products?|items?)\b/i.test(text) ||
+    !/\bprices?\b/i.test(text)
+  ) return null;
+
+  // Only handle price/stock comparisons here. Other comparison
+  // dimensions must not be silently dropped.
+  if (
+    /\b(?:ratings?|reviews?|shipping|delivery charges?|dimensions?)\b/i
+      .test(text.replace(/\bdo not\b[^.]*[.!?]/gi, ""))
+  ) return null;
+
+  const titles = [
+    ...text.matchAll(/["“]([^"”\n]{2,120})["”]/g)
+  ].map(match => match[1].trim());
+
+  if (
+    titles.length !== 2 ||
+    titles.some(title => !title || /https?:\/\//i.test(title)) ||
+    titles[0].toLowerCase() === titles[1].toLowerCase()
+  ) return null;
+
+  let startUrl;
+  try {
+    const url = new URL(currentUrl);
+    if (!["https:", "http:"].includes(url.protocol))
+      return null;
+    startUrl = url.href;
+  } catch {
+    return null;
+  }
+
+  return {
+    type: "product_comparison",
+    startUrl,
+    titles,
+    limit: 2
+  };
 }
 
 function interpretExplicitComparison(instruction) {
@@ -657,6 +725,9 @@ export function normalizeModelTaskEnvelope(candidate, userInstruction) {
 // silently turned into a navigation-only goal by a well-formed model reply.
 export function requiresFormStateGoal(instruction, formControls = []) {
   if (!Array.isArray(formControls) || formControls.length === 0) return false;
+  // Search -> article -> explain requires navigation, not a form-state goal.
+  // Leave every other form-detection rule unchanged.
+  if (explicitSearchArticleDestination(instruction)) return false;
   const request = String(instruction || "");
   const mutation = /\b(?:fill|type|enter|write|put|select|choose|pick|tick|uncheck|check|set|use)\b/i.test(request);
   const fieldReference = /\b(?:form|field|input|textarea|text|writing\s+area|name|option|dropdown|checkbox|radio|menu|box)\b/i.test(request);
@@ -672,10 +743,369 @@ function hasFormStateGoal(goal) {
 }
 
 
+// Shared checkbox aliases must not become invented text-valued requirements.
+// Preserve valid boolean aliases and every unrelated requirement, including
+// anything explicitly named by the user. This only removes an unfulfillable
+// model-generated GROUP alias when a single numbered checkbox has its own
+// authoritative explicit goal.
+
+// Disambiguate model-generated shared-name checkbox aliases
+// using explicit individual instructions and observed controls.
+// Do not weaken the goal schema or silently omit other fields.
+
+// Resolve explicitly numbered checkbox states before browser
+// observation, without inventing or dropping other field goals.
+
+// Resolve uniquely grounded pre-browser form aliases.
+// Never synthesize a missing condition or change a quoted value.
+function reconcileExplicitFormLabels30Q(
+  goal,instruction,formControls=[]
+) {
+  if(
+    goal?.type!=="all_of" ||
+    !Array.isArray(goal.conditions) ||
+    (Array.isArray(formControls) && formControls.length>0)
+  ) return goal;
+
+  const text=String(instruction??"");
+  const norm=value=>String(value??"")
+    .trim().toLowerCase().replace(/[^a-z0-9]+/g," ");
+
+  const conditions=goal.conditions.map(c=>({...c}));
+  const unique=predicate=>{
+    const matches=conditions.filter(predicate);
+    return matches.length===1?matches[0]:null;
+  };
+
+  const textarea=text.match(
+    /\breplace\s+(?:the\s+)?(?:entire\s+)?(textarea\s+[a-z][\w ]{0,70}?)\s+with\s+["“]([^"”]{1,300})["”]/i
+  );
+
+  if(textarea) {
+    const full=textarea[1].trim();
+    const suffix=full.replace(/^textarea\s+/i,"");
+    const literal=textarea[2];
+
+    const item=unique(c=>
+      c.type==="form_state" &&
+      norm(c.fieldLabel)===norm(suffix) &&
+      c.expectedValue===literal
+    );
+
+    if(item && !conditions.some(c=>
+      c!==item &&
+      c.type==="form_state" &&
+      norm(c.fieldLabel)===norm(full)
+    )) item.fieldLabel=full;
+  }
+
+  const radio=text.match(
+    /\bselect\s+radio\s+(\d+)\s+in\s+(?:the\s+)?([a-z][a-z ]{1,60}?)\s+group\b/i
+  );
+
+  if(radio) {
+    const specific="Radio "+radio[1];
+    const group=radio[2].trim();
+
+    const item=unique(c=>
+      c.type==="form_state" &&
+      norm(c.fieldLabel)===norm(group) &&
+      norm(c.expectedValue)===norm(specific)
+    );
+
+    if(item && !conditions.some(c=>
+      c!==item &&
+      c.type==="form_state" &&
+      norm(c.fieldLabel)===norm(specific)
+    )) {
+      item.fieldLabel=specific;
+      item.expectedValue="checked";
+    }
+  }
+
+  const dropdown=text.match(
+    /\bselect\s+(drop\s*down\s+item\s+\d+)\s+in\s+(?:the\s+)?dropdown\b/i
+  );
+
+  if(dropdown) {
+    const full=dropdown[1].trim();
+    const short=full.replace(/^drop\s*down\s+/i,"");
+
+    const item=unique(c=>
+      c.type==="form_state" &&
+      norm(c.fieldLabel)==="dropdown" &&
+      norm(c.expectedValue)===norm(short)
+    );
+
+    if(item)item.expectedValue=full;
+  }
+
+  return {...goal,conditions};
+}
+
+function resolvePreBrowserCheckbox30M(
+  goal,instruction,formControls=[]
+) {
+  if(
+    goal?.type!=="all_of" ||
+    !Array.isArray(goal.conditions)
+  ) return goal;
+
+  if(
+    Array.isArray(formControls) &&
+    formControls.some(c=>c?.type==="checkbox")
+  ) return goal;
+
+  const text=String(instruction??"");
+
+  if(text.toLowerCase().includes("checkboxes[]"))
+    return goal;
+
+  const explicit=extractExplicitCheckboxConditions(text);
+
+  if(explicit.length<2 || explicit.length>10)
+    return goal;
+
+  const norm=value=>String(value??"")
+    .trim().toLowerCase().replace(/\s+/g," ");
+
+  const state=value=>{
+    if(typeof value==="boolean")return value;
+    if(/^(checked|true)$/i.test(String(value)))return true;
+    if(/^(unchecked|false)$/i.test(String(value)))return false;
+    return null;
+  };
+
+  const labels=new Set();
+  const wanted=new Map();
+
+  for(const directive of explicit){
+    const label=norm(directive.fieldLabel);
+
+    if(
+      !/^checkbox [1-9]\d*$/.test(label) ||
+      labels.has(label)
+    )return goal;
+
+    labels.add(label);
+
+    const value=state(directive.expectedValue);
+
+    if(value===null)return goal;
+
+    wanted.set(value,(wanted.get(value)||0)+1);
+  }
+
+  const aliases=goal.conditions.filter(c=>
+    c?.type==="form_state" &&
+    norm(c.fieldLabel)==="checkboxes[]"
+  );
+
+  if(aliases.length!==explicit.length)
+    return goal;
+
+  const observed=new Map();
+
+  for(const alias of aliases){
+    const value=state(alias.expectedValue);
+    if(value===null)return goal;
+    observed.set(value,(observed.get(value)||0)+1);
+  }
+
+  if(
+    observed.size<2 ||
+    observed.size!==wanted.size
+  )return goal;
+
+  for(const [value,count] of wanted){
+    if(observed.get(value)!==count)
+      return goal;
+  }
+
+  // Existing individual checkbox goals must never be
+  // silently overwritten by this alias correction.
+  if(goal.conditions.some(c=>
+    c?.type==="form_state" &&
+    labels.has(norm(c.fieldLabel))
+  ))return goal;
+
+  return {
+    ...goal,
+    conditions:[
+      ...goal.conditions.filter(c=>!aliases.includes(c)),
+      ...explicit
+    ]
+  };
+}
+
+function resolveMixedCheckboxAlias30H(
+  goal,instruction,formControls=[]
+) {
+  const unchanged={goal,conflict:false};
+
+  if(
+    goal?.type!=="all_of" ||
+    !Array.isArray(goal.conditions)
+  ) return unchanged;
+
+  const directives=extractExplicitCheckboxConditions(
+    instruction
+  );
+
+  if(
+    directives.length<2 ||
+    directives.some(d=>d.expectedValue==="unchanged")
+  ) return unchanged;
+
+  const controls=Array.isArray(formControls)
+    ?formControls:[];
+
+  const norm=value=>String(value??"")
+    .trim().toLowerCase().replace(/\s+/g," ");
+
+  const state=value=>{
+    if(typeof value==="boolean")return value;
+
+    const v=norm(value);
+
+    if(/^(true|checked|yes|on|1)$/.test(v))
+      return true;
+
+    if(/^(false|unchecked|no|off|0)$/.test(v))
+      return false;
+
+    return null;
+  };
+
+  const selected=[];
+
+  for(const directive of directives){
+    const match=/^checkbox\s+(\d+)$/i.exec(
+      directive.fieldLabel
+    );
+
+    if(!match)return unchanged;
+
+    const ordinal=Number(match[1]);
+
+    const matches=controls.filter(control=>
+      norm(control.type)==="checkbox" &&
+      (
+        norm(control.label)===
+          norm(directive.fieldLabel) ||
+        (
+          Number.isInteger(control.ordinal) &&
+          control.ordinal===ordinal
+        )
+      )
+    );
+
+    if(matches.length!==1)return unchanged;
+
+    selected.push(matches[0]);
+  }
+
+  if(new Set(selected).size!==selected.length)
+    return unchanged;
+
+  const group=norm(selected[0].name);
+
+  if(
+    !group ||
+    !selected.every(c=>norm(c.name)===group) ||
+    controls.filter(c=>
+      norm(c.type)==="checkbox" &&
+      norm(c.name)===group
+    ).length<2
+  )return unchanged;
+
+  const aliases=goal.conditions.filter(item=>
+    item?.type==="form_state" &&
+    norm(item.fieldLabel)===group &&
+    state(item.expectedValue)!==null
+  );
+
+  const aliasStates=new Set(
+    aliases.map(item=>state(item.expectedValue))
+  );
+
+  if(aliasStates.size!==2)
+    return unchanged;
+
+  // An explicitly required group state must not disappear.
+  if(norm(instruction).includes(group))
+    return {goal,conflict:true};
+
+  const wantedStates=new Set(
+    directives.map(d=>state(d.expectedValue))
+  );
+
+  if(
+    wantedStates.has(null) ||
+    [...aliasStates].some(v=>!wantedStates.has(v))
+  )return unchanged;
+
+  const labels=new Set(
+    directives.map(d=>norm(d.fieldLabel))
+  );
+
+  const preserved=goal.conditions.filter(item=>
+    !aliases.includes(item) &&
+    !(
+      item?.type==="form_state" &&
+      labels.has(norm(item.fieldLabel))
+    )
+  );
+
+  return {
+    goal:{
+      ...goal,
+      conditions:[...preserved,...directives]
+    },
+    conflict:false
+  };
+}
+
+function isMalformedSharedCheckboxAlias(item, checkboxDirectives, formControls, instruction) {
+  if (checkboxDirectives.length !== 1 || item?.type !== 'form_state') return false;
+  if (checkboxDirectives[0].expectedValue === 'unchanged') return false;
+  const name = String(item.fieldLabel ?? '').trim().toLowerCase();
+  if (!name || String(instruction ?? '').toLowerCase().includes(name)) return false;
+  const value = item.expectedValue;
+  if (typeof value === 'boolean' ||
+      /^(?:true|false|checked|unchecked|yes|no|on|off|1|0)$/i.test(String(value ?? '').trim())) {
+    return false;
+  }
+  const matchingCheckboxes = formControls.filter(control =>
+    String(control?.type ?? '').toLowerCase() === 'checkbox' &&
+    String(control?.name ?? '').trim().toLowerCase() === name);
+  return matchingCheckboxes.length >= 2;
+}
+
 // Generic, conservatively grounded intent corrections. These operate on the
 // whole user instruction, not on the initial URL or isolated keyword fragments.
 function repairObviousGoal(goal, instruction, formControls = [], currentUrl = '') {
   const explicit = deriveExplicitOutcomeGoal(instruction, formControls);
+  const checkboxDirectives = extractExplicitCheckboxConditions(instruction);
+  if (checkboxDirectives.length) {
+    const base = goal?.type === 'all_of' ? goal.conditions :
+      goal?.type === 'form_state' ? [goal] : [];
+    const explicitNames = new Set(checkboxDirectives.map(item =>
+      String(item.fieldLabel).toLowerCase().replace(/\s+/g, ' ').trim()
+    ));
+    // An explicit user directive is authoritative over a conflicting model
+    // value. Preserve unrelated model goals instead of silently replacing
+    // the entire multi-field task with its checkbox subset.
+    const merged = [
+      ...base.filter(item => !(
+        (item?.type === 'form_state' &&
+          explicitNames.has(String(item.fieldLabel).toLowerCase().replace(/\s+/g, ' ').trim())) ||
+        isMalformedSharedCheckboxAlias(item, checkboxDirectives, formControls, instruction)
+      )),
+      ...checkboxDirectives
+    ];
+    return merged.length === 1 ? merged[0] : {type:'all_of', conditions:merged};
+  }
   if (explicit) return explicit;
   const text = String(instruction || '');
   const controls = Array.isArray(formControls) ? formControls : [];
@@ -729,6 +1159,17 @@ export async function interpretTask(
     !instruction.trim()
   ) {
     throw new Error("Instruction must be non-empty.");
+  }
+
+  const namedTask = interpretNamedComparisonRequest(
+    instruction, currentUrl
+  );
+
+  if (namedTask) {
+    return {
+      status: "interpreted",
+      task: validateTaskContract(namedTask)
+    };
   }
 
   const explicitTask = interpretExplicitComparison(
@@ -832,7 +1273,14 @@ Do not invent an exact user quote from freely authored text.`;
       : [
           requiresFormStateGoal(instruction, formControls)
             ? "CORRECTION: Your previous response did not match the required task schema. The user explicitly asks you to EDIT form controls. Return a browser_goal with form_state conditions for every requested field. A page_destination goal is incorrect. Do not submit."
-            : "Your previous response did not match the required task schema. Return only valid JSON.",
+            : [
+                "CORRECTION: Your previous response failed task-schema validation.",
+                "Validation error: " +
+                  String(lastParseError?.message ?? "Invalid goal").slice(0, 240),
+                "Return valid JSON using only fields allowed for each goal type.",
+                "Preserve all requested actions, prohibitions, and completion conditions.",
+                "Do not treat a visible download link as proof of a saved download."
+              ].join(" "),
           "For browser_goal, include goal.type and required goal properties.",
           "Use all_of.conditions for multiple form fields, one form_state each.",
           "ONLY all_of may contain conditions; form_state contains ONLY type, fieldLabel, expectedValue.",
@@ -933,7 +1381,29 @@ Do not invent an exact user quote from freely authored text.`;
         continue;
       }
       if (normalized.type === "browser_goal") {
-        const goal = normalizeGeneratedGoal(normalized.goal);
+        const resolved=resolveMixedCheckboxAlias30H(
+          resolvePreBrowserCheckbox30M(
+            reconcileExplicitFormLabels30Q(
+              normalizeGeneratedGoal(normalized.goal),
+              instruction,
+              formControls
+            ),
+            instruction,
+            formControls
+          ),
+          instruction,
+          formControls
+        );
+
+        if(resolved.conflict) {
+          return {
+            status:"needs_clarification",
+            reason:"Conflicting checkbox group requirements."
+          };
+        }
+
+        const goal=resolved.goal;
+        normalized.goal=goal;
         if (requiresFormStateGoal(instruction, formControls) &&
             !hasFormStateGoal(goal)) {
           lastParseError = new Error(
@@ -976,12 +1446,12 @@ Do not invent an exact user quote from freely authored text.`;
     if (explicit) {
       return { status:'interpreted', task:validateTask({
         type:'browser_goal', instruction, goal:explicit
-      }) };
+      },{formControls}) };
     }
     return {
-      status: "needs_clarification",
+      status: "interpretation_failed",
       reason:
-        "The local model could not produce a valid browser task " +
+        "Internal task interpretation failed: the model produced invalid output " +
         "after two attempts. " +
         String(lastParseError?.message ?? "")
     };
@@ -1109,6 +1579,20 @@ Do not invent an exact user quote from freely authored text.`;
         instruction
       );
 
+    // The model can return a schema-valid *subset* of a multi-field
+    // instruction. Do not permit a checkbox-only goal to masquerade as
+    // completion when other explicit text or dropdown edits were requested.
+    const coverage = checkExplicitFormGoalCoverage(
+      instruction, parsed.goal, formControls
+    );
+    if (!coverage.complete) {
+      return {
+        status: "needs_clarification",
+        reason: "The model omitted explicitly requested form edits: " +
+          coverage.missing.join(", ") + ". No browser actions were performed."
+      };
+    }
+
     // Preserve explicit heading-based completion requirements.
     // Do not retain redundant body-text conditions generated by the LLM.
     const explicitHeading = instruction.match(
@@ -1162,7 +1646,17 @@ Do not invent an exact user quote from freely authored text.`;
   try {
     return {
       status: "interpreted",
-      task: validateTask(parsed)
+      task: validateTask(
+          parsed?.type === "browser_goal"
+            ? {
+                ...parsed,
+                goal: reconcileExplicitRadioGoal31E(
+                  parsed.goal,instruction,formControls
+                )
+              }
+            : parsed,
+          {formControls}
+        )
     };
   } catch (error) {
     return {

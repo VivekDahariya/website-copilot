@@ -23,6 +23,8 @@ const GOAL_FIELDS = {
   element_count: new Set(["type", "label", "expectedValue"]),
   paragraph_count: new Set(["type", "expectedValue"]),
   modal_closed: new Set(["type"]),
+  download_receipt: new Set(["type"]),
+  tab_workflow: new Set(["type"]),
   all_of: new Set([
     "type",
     "conditions"

@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  writeFile,
   rm
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -173,6 +174,63 @@ export async function captureVerifiedDownload(
       force: true
     });
 
+    throw error;
+  }
+}
+
+// Capture a PDF that Chromium rendered inline rather than emitting a
+// Playwright download event. Callers must first verify the exact approved
+// browser destination; this function only validates and stores the bytes.
+export async function captureVerifiedPdfBytes(
+  bytes,
+  {
+    filename,
+    directory,
+    maxBytes = DEFAULT_MAX_BYTES
+  } = {}
+) {
+  const safeFilename = validateDownloadFilename(filename);
+
+  if (typeof directory !== "string" || !directory.trim()) {
+    throw new Error("DOWNLOAD_DIRECTORY_REQUIRED");
+  }
+
+  if (
+    !Number.isSafeInteger(maxBytes) ||
+    maxBytes < 100 ||
+    maxBytes > DEFAULT_MAX_BYTES
+  ) {
+    throw new Error("INVALID_DOWNLOAD_SIZE_LIMIT");
+  }
+
+  if (!Buffer.isBuffer(bytes) || bytes.length > maxBytes) {
+    throw new Error("DOWNLOAD_SIZE_LIMIT_EXCEEDED");
+  }
+
+  validatePdfBytes(bytes);
+
+  const root = resolve(directory);
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const isolatedDirectory = await mkdtemp(join(root, "capture-"));
+  const internalPath = join(isolatedDirectory, safeFilename);
+
+  try {
+    await writeFile(internalPath, bytes, {
+      flag: "wx",
+      mode: 0o600
+    });
+
+    return {
+      id: randomUUID(),
+      filename: safeFilename,
+      mediaType: "application/pdf",
+      bytes: bytes.length,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      internalPath,
+      verified: true
+    };
+  } catch (error) {
+    await rm(isolatedDirectory, { recursive: true, force: true });
     throw error;
   }
 }

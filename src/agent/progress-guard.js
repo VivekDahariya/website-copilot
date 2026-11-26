@@ -19,9 +19,40 @@ function actionKey(element, decision) {
   });
 }
 
+
+function selfNavigationKey(observation,element,decision) {
+  if(decision?.operation!=="click" || !element?.href)
+    return null;
+
+  try {
+    const current=new URL(observation.url);
+    const target=new URL(element.href,current);
+
+    if(target.hash) return null;
+
+    current.hash="";
+    target.hash="";
+
+    if(
+      !["http:","https:"].includes(current.protocol) ||
+      current.href!==target.href
+    ) return null;
+
+    return JSON.stringify({
+      page:current.href,
+      href:target.href,
+      label:element.label||""
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function createProgressGuard(initialUrl) {
   const visitedUrls = new Map();
   const attemptedActions = new Set();
+  const attemptedSelfLinks = new Set();
+  const abandonedBranches = new Set();
 
   const MAX_VISITS_PER_URL = 2;
 
@@ -45,6 +76,17 @@ export function createProgressGuard(initialUrl) {
         action: actionKey(element, decision)
       });
 
+      const selfKey=selfNavigationKey(
+        observation,element,decision
+      );
+
+      if(selfKey && attemptedSelfLinks.has(selfKey)) {
+        return {
+          allowed:false,
+          reason:"repeated_self_navigation"
+        };
+      }
+
       if (attemptedActions.has(key)) {
         return {
           allowed: false,
@@ -60,6 +102,18 @@ export function createProgressGuard(initialUrl) {
           const destination = normalizeUrl(
             new URL(element.href, observation.url).href
           );
+
+          const branch=JSON.stringify([
+            normalizeUrl(observation.url),
+            destination
+          ]);
+
+          if(abandonedBranches.has(branch)) {
+            return {
+              allowed:false,
+              reason:"previously_abandoned_branch"
+            };
+          }
 
           const visits = visitedUrls.get(destination) || 0;
 
@@ -81,6 +135,10 @@ export function createProgressGuard(initialUrl) {
     },
 
     recordAttempt(observation, element, decision) {
+      const selfKey=selfNavigationKey(
+        observation,element,decision
+      );
+      if(selfKey) attemptedSelfLinks.add(selfKey);
       const { fingerprint } = createPageState(observation);
 
       attemptedActions.add(
@@ -89,6 +147,13 @@ export function createProgressGuard(initialUrl) {
           action: actionKey(element, decision)
         })
       );
+    },
+
+    blockNavigation(fromUrl,toUrl) {
+      abandonedBranches.add(JSON.stringify([
+        normalizeUrl(fromUrl),
+        normalizeUrl(toUrl)
+      ]));
     },
 
     recordNavigation(url) {

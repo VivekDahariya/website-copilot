@@ -1,6 +1,10 @@
 import { getPageId } from "../agent/page-identity.js";
 import { fileURLToPath } from "node:url";
 import { createVerifiedDownloadRegistry } from "../agent/verified-download-registry.js";
+import { createMediaDelivery, extractVerifiedImages } from "./media-delivery.js";
+import { launchHiddenBrowser } from "../browser/hidden-launch.js";
+import { describeUnreachableSite } from "../browser/unreachable-site.js";
+import { usedWebSearch } from "../agent/website-discovery.js";
 import {
   captureRequestedPdfAndRegister
 } from "../agent/approved-pdf-delivery.js";
@@ -8,9 +12,29 @@ import {
   extractVerifiedPdfResult
 } from "../agent/pdf-delivery-result.js";
 import http from "node:http";
+import {
+  collectRunExplanationEvidence,
+  collectCompletionChecks,
+  collectRunSteps,
+  collectRunContext,
+  explainRun,
+  explainFromFacts
+} from "./run-explanation.js";
+import { isDirectInstructionEnabled, redactStatedPassword } from "../agent/direct-instruction.js";
+import { deliveredReason } from "./delivered-reason.js";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { withRunMetrics, recordAgentMetric, recordExecutionDurations } from "./run-metrics.js";
+import { withEvidenceGraph, recordEvidenceEvent } from "./evidence-graph.js";
 import { chromium } from "playwright";
+import { shouldCloseBrowserAfterRun } from "./browser-run-lifecycle.js";
+import { assessTask } from "../agent/content-policy.js";
+import {
+  createNavigationActionTree
+} from "../agent/navigation-tree.js";
+import {
+  extractVerifiedNamedComparison
+} from "./comparison-result.js";
 import {
   createAgentRunControl
 } from "../agent/agent-run-control.js";
@@ -25,6 +49,7 @@ import {
 
 const PORT = Number(process.env.PORT || 4317);
 const HOST = "127.0.0.1";
+const BIND_HOST = process.env.COPILOT_BIND_HOST || HOST;
 
 let browser = null;
 let running = false;
@@ -45,9 +70,16 @@ const downloadDirectory = fileURLToPath(
   new URL("../../workspace/downloads/", import.meta.url)
 );
 
+const mediaDirectory = fileURLToPath(
+  new URL("../../workspace/media/", import.meta.url)
+);
+
 const verifiedDownloadRegistry = createVerifiedDownloadRegistry({
   directory: downloadDirectory
 });
+// Saved pictures and screenshots, shown in the dashboard with a full screen
+// view and a download. Only files that passed the save check are delivered.
+const mediaDelivery = createMediaDelivery({ directory: mediaDirectory });
 const SNAPSHOT_TTL_MS = 3000;
 
 async function snapshotPageState(page) {
@@ -126,6 +158,11 @@ async function setRealBrowserVisibility(page, visible) {
     });
 
     if (visible) {
+      // A browser started hidden also has to be unhidden at the app level.
+      const owner = page.context().browser();
+      if (typeof owner?.wcpReveal === "function") {
+        await owner.wcpReveal().catch(() => {});
+      }
       await page.bringToFront();
     }
 
@@ -160,12 +197,17 @@ function observeActiveBrowser(browser) {
 
 
 
+const navigationActionTree = createNavigationActionTree();
+
+const runExplanationCache = new WeakMap();
+
 const state = {
   phase: "idle",
   browserVisible: false,
   browserControlAvailable: true,
   url: "",
   activity: [],
+  actionTree:navigationActionTree.snapshot(),
   pending: null,
   result: null,
   error: null
@@ -254,6 +296,42 @@ function observeBrowser(browserInstance) {
 }
 
 async function runTask(instruction, startUrl, maxSteps = 12) {
+  return withRunMetrics(
+    () => withEvidenceGraph(
+      () => runTaskCore(instruction, startUrl, maxSteps),
+      {
+        outputDirectory: fileURLToPath(new URL("../../workspace/evidence-graphs/", import.meta.url)),
+        status: () => state.result?.status ?? state.phase,
+        onComplete: report => {
+          // The shadow verifier compares against a structured goal. Direct
+          // mode has none, so its verdict would be noise, not evidence.
+          if (report.shadowVerifierV2 && !isDirectInstructionEnabled()) {
+            activity(`Shadow State Verifier V2: ${report.shadowVerifierV2.assessment} · ` +
+              `${report.shadowVerifierV2.requirementsMatched ?? 0}/${report.shadowVerifierV2.requirementsTotal ?? 0} ` +
+              `requirements matched (metadata consistency only).`);
+          }
+          if (report.lastSnapshot?.conditions.length) {
+            activity(`Evidence ledger: ${report.requirements.length} checks tracked · ` +
+              `${report.snapshotsSeen} verifier snapshots · ` +
+              `${report.actions.filter(a => a.executed).length} action receipts · ` +
+              `${report.protectedStateViolations} protected-state alerts.`);
+          }
+        }
+      }
+    ),
+    {
+      outputDirectory: fileURLToPath(new URL("../../workspace/run-metrics/", import.meta.url)),
+      status: () => state.result?.status ?? state.phase,
+      onComplete: trace => activity(
+        `Run metrics: ${trace.model.calls} Ollama HTTP calls · ` +
+        `${trace.model.totalMs} ms model · ${trace.browser.executionMs} ms measured browser actions · ` +
+        `${trace.agent.fastPathPlans} fast-path plans · ${trace.totalMs} ms total.`
+      )
+    }
+  );
+}
+
+async function runTaskCore(instruction, startUrl, maxSteps = 12) {
   running = true;
   stopRequested = false;
   activeObservedUrl = null;
@@ -279,6 +357,7 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
   update({
     phase: "starting",
     activity: [],
+    actionTree:navigationActionTree.reset(),
     pending: null,
     result: null,
     error: null,
@@ -288,6 +367,24 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
 
 
   try {
+    // Content policy first: a refused task never opens a browser or a site.
+    const policy = assessTask({ instruction, startUrl });
+    if (!policy.allowed) {
+      update({
+        phase: "finished",
+        url: "",
+        result: {
+          status: "refused_by_policy",
+          reason: policy.reason,
+          history: [],
+          checks: [],
+          foundSite: false
+        }
+      });
+      activity("Task refused: " + policy.reason + " Nothing was opened.");
+      return;
+    }
+
     if (browser) {
       await browser.close().catch(() => {});
     }
@@ -297,33 +394,70 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
       browserControlAvailable: true
     });
 
-    browser = await chromium.launch({
-      headless: process.env.COPILOT_HEADLESS === "1",
-        args: ["--start-minimized"]
-    });
+    // Preferred: start Chromium hidden, so no window ever flashes on screen
+    // (the live view stays in the dashboard; "Show real browser" reveals it).
+    // Falls back to the normal launch whenever that is unavailable or fails.
+    const hiddenLaunch =
+      process.env.COPILOT_HEADLESS === "1" ||
+      process.env.COPILOT_HIDDEN_LAUNCH === "0"
+        ? null
+        : await launchHiddenBrowser({
+            chromium,
+            viewport: { width: 1280, height: 800 },
+            log: reason => console.log(
+              "Hidden browser launch not used:", reason
+            )
+          });
+
+    if (hiddenLaunch) {
+      browser = hiddenLaunch.browser;
+    } else {
+      browser = await chromium.launch({
+        headless: process.env.COPILOT_HEADLESS === "1",
+          args: ["--start-minimized"]
+      });
+    }
 
     if (stopRequested) {
       await browser.close();
       throw new Error("Task stopped by user.");
     }
 
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
-      acceptDownloads: true
-    });
+    const context = hiddenLaunch
+      ? hiddenLaunch.context
+      : await browser.newContext({
+          viewport: { width: 1280, height: 800 },
+          acceptDownloads: true
+        });
 
-    context.on("page", openedPage => {
+    const watchPageUrl = openedPage => {
       openedPage.on("framenavigated", frame => {
         if (frame === openedPage.mainFrame()) {
           update({ url: openedPage.url() });
         }
       });
-    });
+    };
 
-    const page = await context.newPage();
+    context.on("page", watchPageUrl);
+
+    const page = hiddenLaunch
+      ? hiddenLaunch.page
+      : await context.newPage();
+
+    // A page that already exists does not raise the "page" event.
+    if (hiddenLaunch) watchPageUrl(page);
 
     try {
-      await setRealBrowserVisibility(page, false);
+      if (hiddenLaunch) {
+        // Already hidden since it started. Minimizing the window of a hidden
+        // app makes macOS draw it for about half a second first.
+        update({
+          browserVisible: false,
+          browserControlAvailable: true
+        });
+      } else {
+        await setRealBrowserVisibility(page, false);
+      }
     } catch {
       update({
         browserVisible: true,
@@ -333,10 +467,14 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
     }
 
     if (startUrl) {
-      await page.goto(startUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: 30000
-      });
+      try {
+        await page.goto(startUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000
+        });
+      } catch (navigationError) {
+        throw new Error(describeUnreachableSite(navigationError, startUrl));
+      }
     }
 
     update({
@@ -411,14 +549,17 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
       return { completed };
     };
 
+    let siteDiscovery = null;
     const result = await executeNaturalLanguageTask(
       page,
       instruction,
       {
         urlLess: !startUrl,
+        onDiscovery: found => { siteDiscovery = found; },
         orchestratorOptions: {
           agentOptions: {
           maxSteps,
+          mediaDirectory,
           approvalProvider,
           humanHandoverProvider,
           onApprovedPdfClick: async ({
@@ -454,6 +595,9 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
           },
           runControl: control,
           onAgentEvent: event => {
+            recordAgentMetric(event);
+            recordEvidenceEvent(event);
+            state.actionTree = navigationActionTree.record(event);
             if (
               event.type === "page_observed" &&
               typeof event.url === "string"
@@ -483,11 +627,20 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
               activity(`${event.operation} on ${event.ref}: ${outcome}`);
             }
 
+            if (event.type === "media_saved") {
+              activity(`${event.kind === "screenshot" ? "Screenshot" : "Image"} saved: ${event.fileName} ` +
+                `(${Math.max(1, Math.round(event.bytes / 1024))} KB) in workspace/media/`);
+            }
+
             if (event.type === "page_observed") {
               activity(
                 `Observed: ${event.title || event.url}` +
                 (event.goalVerified ? " · goal matched" : "")
               );
+            }
+
+            if (event.type === "navigation_backtracked") {
+              activity("Backtracked to a previous page; exploring alternatives.");
             }
 
             if (event.type === "goal_verified") {
@@ -518,6 +671,7 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
 
     // Natural-language executor wraps orchestrator and agent results.
     const agentResult = result.execution?.result ?? result;
+    recordExecutionDurations(agentResult.history);
 
     const sanitizedHistory = (agentResult.history ?? []).map(item => ({
       step: item.step,
@@ -547,23 +701,61 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
       result
     );
 
+    const claimedNamedComparison =
+      result.interpretedTask?.type === "product_comparison" &&
+      Array.isArray(result.interpretedTask.titles);
+
+    const deliveredComparison = claimedNamedComparison
+      ? extractVerifiedNamedComparison(result)
+      : null;
+
     const deliveredStatus = claimedDownload
       ? (deliveredPdf ? "download_ready" : "download_unavailable")
-      : result.status === "answer_ready" && !deliveredAnswer
-        ? "answer_unavailable"
-        : result.status;
+      : claimedNamedComparison &&
+          result.status === "verified_complete" &&
+          !deliveredComparison
+        ? "comparison_unavailable"
+        : result.status === "answer_ready" && !deliveredAnswer
+          ? "answer_unavailable"
+          : result.status;
+
+    // A picture or screenshot the run saved (and verified from the file) is
+    // offered to the dashboard only when the run itself was verified.
+    const deliveredImages = [];
+    if (deliveredStatus === "verified_complete") {
+      for (const media of extractVerifiedImages(agentResult.history)) {
+        try {
+          deliveredImages.push(await mediaDelivery.register(media));
+        } catch (error) {
+          console.log("Picture not delivered to the dashboard:", String(error?.message ?? error));
+        }
+      }
+    }
 
     update({
       phase: "finished",
       url: browserPage.url(),
       result: {
         status: deliveredStatus,
-        reason: agentResult.reason ?? result.reason ??
-          (deliveredStatus === "answer_unavailable"
-            ? "No usable answer was delivered."
-            : null),
+        reason: deliveredReason({ result, agentResult, deliveredStatus }),
         history: sanitizedHistory,
+        // Names and pass/fail of the completion checks only; no page
+        // text or typed values. Used by the fact-based run report.
+        checks: (Array.isArray(agentResult.verification?.evidence?.checks)
+          ? agentResult.verification.evidence.checks : [])
+          .filter(item => item && typeof item.check === "string")
+          .slice(0, 20)
+          .map(item => ({
+            check: item.check,
+            passed: item.passed === true,
+            relevant: item.relevant === true
+          })),
+        // True only when the run found the site by searching the web. An
+        // address typed in the task or the Starting URL field is not a search.
+        foundSite: !startUrl && usedWebSearch(siteDiscovery),
+        ...(deliveredComparison ? { comparison: deliveredComparison } : {}),
         ...(deliveredPdf ? { download: deliveredPdf } : {}),
+        ...(deliveredImages.length ? { images: deliveredImages } : {}),
         ...(deliveredAnswer ? {
           answer: deliveredAnswer,
           sourceUrl: result.sourceUrl,
@@ -604,13 +796,42 @@ async function runTask(instruction, startUrl, maxSteps = 12) {
     if (activeRunControl === control) {
       activeRunControl = null;
     }
+    // Close Chromium on terminal failures, not just action-budget expiry.
+    // Preserve verified results and actions that need user inspection.
+    if (browser && shouldCloseBrowserAfterRun(
+      state.phase, state.result?.status
+    )) {
+      const finishedBrowser = browser;
+      browser = null;
+      activeObservedTabId = null;
+      activeObservedUrl = null;
+      screenshotTickets.clear();
+      await finishedBrowser.close().catch(() => {});
+      update({ browserVisible: false });
+      activity("Browser closed after terminal unsuccessful run.");
+    }
     running = false;
   }
 }
 
-const html = await readFile(
+// Identifies this server run. The pages keep their task history only while the
+// server run and the browser tab stay the same, and not across a page refresh.
+const serverSession = randomUUID();
+
+function withServerSession(file) {
+  return Buffer.from(file.toString("utf8").replace(
+    "</head>",
+    `<meta name="wcp-session" content="${serverSession}">\n</head>`
+  ));
+}
+
+const html = withServerSession(await readFile(
   new URL("./index.html", import.meta.url)
-);
+));
+
+const historyHtml = withServerSession(await readFile(
+  new URL("./history.html", import.meta.url)
+));
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -640,6 +861,13 @@ const server = http.createServer(async (req, res) => {
       return await verifiedDownloadRegistry.serve(token, res);
     }
 
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/api/media/")
+    ) {
+      return await mediaDelivery.serve(pathname.slice("/api/media/".length), res);
+    }
+
     if (req.method === "GET" && pathname === "/") {
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
@@ -649,7 +877,76 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
 
-    if (req.method === "GET" && pathname === "/api/state") {
+    if (req.method === "GET" && pathname === "/history") {
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
+
+      return res.end(historyHtml);
+    }
+
+    
+    if (
+      req.method === "POST" &&
+      pathname === "/api/run-explanation"
+    ) {
+      if (
+        running ||
+        !["finished","error","cancelled"].includes(state.phase) ||
+        (!state.result && !state.error)
+      ) {
+        return respond(res,409,{
+          error:"No completed run available to explain."
+        });
+      }
+
+      // Evidence comes exclusively from server-held run state.
+      const key=state.result ?? state.activity;
+      let pending=runExplanationCache.get(key);
+
+      if(!pending) {
+        const evidence=collectRunExplanationEvidence(state);
+        // Code supplies the facts and the pass/fail verdict; the local
+        // model only words them. Text that contradicts them is rejected.
+        pending=explainRun(evidence,{
+          checks:collectCompletionChecks(state),
+          steps:collectRunSteps(state),
+          context:collectRunContext(state)
+        });
+        runExplanationCache.set(key,pending);
+      }
+
+      try {
+        const details=await pending;
+
+        if((state.result ?? state.activity)!==key)
+          return respond(res,409,{
+            error:"This explanation belongs to an earlier run."
+          });
+
+        return respond(res,200,details);
+      } catch {
+        runExplanationCache.delete(key);
+        // The model could not word the record reliably: report the same facts
+        // without it, rather than leaving the person with nothing.
+        try {
+          const details=explainFromFacts(collectRunExplanationEvidence(state),{
+            checks:collectCompletionChecks(state),
+            steps:collectRunSteps(state),
+            context:collectRunContext(state)
+          });
+          runExplanationCache.set(key,Promise.resolve(details));
+          return respond(res,200,details);
+        } catch {
+          return respond(res,503,{
+            error:"Local Ollama could not write a reliable explanation. Please retry."
+          });
+        }
+      }
+    }
+
+if (req.method === "GET" && pathname === "/api/state") {
       return respond(res, 200, state);
     }
 
@@ -668,7 +965,17 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/api/screenshot") {
-      const page = browser ? observeActiveBrowser(browser) : null;
+      const requestedTabId = new URL(req.url, `http://${HOST}:${PORT}`)
+        .searchParams.get("tabId");
+      const pages = browser
+        ? browser.contexts().flatMap(context => context.pages())
+            .filter(candidate => !candidate.isClosed())
+        : [];
+      // Read-only preview selection; do not call bringToFront or alter
+      // activeObservedTabId (the agent's page ownership stays unchanged).
+      const page = requestedTabId
+        ? pages.find(candidate => getPageId(candidate) === requestedTabId) ?? null
+        : (browser ? observeActiveBrowser(browser) : null);
 
       if (!page) {
         return respond(res, 404, {
@@ -692,6 +999,7 @@ const server = http.createServer(async (req, res) => {
 
         if (
           state.phase === "paused" &&
+          (!requestedTabId || requestedTabId === activeObservedTabId) &&
           activeRunControl?.getState() === "paused" &&
           before &&
           before === after &&
@@ -792,7 +1100,14 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (startUrl) {
-        const parsed = new URL(startUrl);
+        let parsed;
+        try {
+          parsed = new URL(startUrl);
+        } catch {
+          return respond(res, 400, {
+            error: "Enter a valid starting URL, for example https://example.com."
+          });
+        }
 
         if (!["http:", "https:"].includes(parsed.protocol)) {
           return respond(res, 400, {
@@ -806,8 +1121,11 @@ const server = http.createServer(async (req, res) => {
 
       void runTask(instruction, startUrl, maxSteps);
 
+      // The dashboard keeps a per-session history of started tasks. A password
+      // the user typed into the task is removed from the copy it may store.
       return respond(res, 202, {
-        accepted: true
+        accepted: true,
+        instruction: redactStatedPassword(instruction)
       });
     }
 
@@ -1353,7 +1671,7 @@ if (
   }
 });
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, BIND_HOST, () => {
   console.log(
     `Website CoPilot dashboard: http://${HOST}:${PORT}`
   );

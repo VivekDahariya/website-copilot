@@ -4,7 +4,17 @@ function normalize(value) {
 }
 
 export function detectNavigationIntent(task) {
-  const text = normalize(task);
+  // Ignore prohibited navigation verbs when detecting positive intent.
+  // The original task and its safety constraints remain unchanged.
+  const text = normalize(task)
+    .replace(
+      /\b(?:do\s+not|don't|dont|never|must\s+not|should\s+not)\s+(?:navigate|open|visit|go\s+to|find\s+and\s+open|search\s+for|follow|reach)\b/gi,
+      ""
+    )
+    .replace(
+      /\bwithout\s+(?:navigating|opening|visiting|going\s+to|searching\s+for|following)\b/gi,
+      ""
+    );
 
   return (
     /\b(?:navigate|open|visit|go to|find and open|search for|follow|reach)\b/i.test(text) &&

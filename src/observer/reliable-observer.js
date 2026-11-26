@@ -1,10 +1,35 @@
 import { observePage } from "./dom-observer.js";
+import { stopPendingNavigation } from "../browser/pending-navigation.js";
 
 const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_RETRY_DELAY_MS = 350;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// One look at the page must not wait forever: while a navigation is pending
+// (a script redirected to a server that never answers) page.evaluate does not
+// return at all.
+function observationTimeoutMs() {
+  const configured = Number(process.env.COPILOT_OBSERVE_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 500 && configured <= 120000
+    ? configured : 12000;
+}
+
+async function withTimeLimit(promise, ms) {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`The page did not answer within ${Math.round(ms / 100) / 10} s.`);
+      error.code = "OBSERVATION_TIMEOUT";
+      reject(error);
+    }, ms);
+  });
+  // A late result of the abandoned look must not become an unhandled rejection.
+  promise.catch(() => {});
+  try { return await Promise.race([promise, limit]); }
+  finally { clearTimeout(timer); }
 }
 
 export function assessObservation(observation) {
@@ -74,7 +99,7 @@ export async function observeReliably(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      lastObservation = await observer(page);
+      lastObservation = await withTimeLimit(observer(page), observationTimeoutMs());
 
       lastAssessment = assessObservation(lastObservation);
 
@@ -89,9 +114,19 @@ export async function observeReliably(
     } catch (error) {
       lastAssessment = {
         usable: false,
-        reason: "observer_error",
+        reason: error.code === "OBSERVATION_TIMEOUT"
+          ? "observation_timeout"
+          : "observer_error",
         message: error.message
       };
+      if (error.code === "OBSERVATION_TIMEOUT") {
+        // Stop the load that never finishes so the page can be read again.
+        const stopped = await stopPendingNavigation(page);
+        console.log(
+          "Page did not answer; pending navigation " +
+          (stopped ? "stopped." : "could not be stopped.")
+        );
+      }
     }
 
     if (attempt < maxAttempts) {
@@ -105,4 +140,27 @@ export async function observeReliably(
     observation: lastObservation,
     assessment: lastAssessment
   };
+}
+
+// A sentence for a person (and the run report) saying why the page could not be
+// read. The raw assessment stays available next to it.
+export function describeObservationFailure(assessment, url = "") {
+  if (String(url).startsWith("chrome-error://")) {
+    return "The browser could not load the page: the website did not answer, " +
+      "refused the connection or does not exist.";
+  }
+  const reason = assessment?.reason;
+  if (reason === "observation_timeout") {
+    return "The page did not answer in time, so CoPilot could not read it.";
+  }
+  if (reason === "observer_error") {
+    const detail = typeof assessment?.message === "string"
+      ? assessment.message.split("\n")[0].slice(0, 160).trim()
+      : "";
+    return "The page could not be read" + (detail ? `: ${detail}` : ".");
+  }
+  if (reason === "title_only_observation" || reason === "empty_page_observation") {
+    return "The page has no readable content (it may still be loading or may be blank).";
+  }
+  return "The page could not be read.";
 }

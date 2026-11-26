@@ -1,5 +1,19 @@
 import { createPageState } from "./page-state.js";
 
+// Only these operations take a value. For every other operation (click,
+// right_click, hover, check, ...) a small model often puts free text in the
+// value field, such as the element's label, and changes it between
+// attempts. That text is not part of what the action is, so it must not
+// make a repeated action look like a new one.
+const VALUE_OPERATIONS = new Set([
+  "fill", "select", "press", "set_range", "drag", "scroll"
+]);
+
+function identityValue(decision) {
+  return VALUE_OPERATIONS.has(decision?.operation)
+    ? decision.value ?? "" : "";
+}
+
 export function createStagnationRecovery({
   maxRecoveries = 2
 } = {}) {
@@ -25,7 +39,7 @@ export function createStagnationRecovery({
       JSON.stringify({
         ref: element.ref,
         operation: decision.operation,
-        value: decision.value ?? ""
+        value: identityValue(decision)
       })
     );
   }
@@ -37,7 +51,7 @@ export function createStagnationRecovery({
       JSON.stringify({
         ref: element.ref,
         operation: decision.operation,
-        value: decision.value ?? ""
+        value: identityValue(decision)
       })
     ) ?? false;
   }

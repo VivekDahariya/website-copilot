@@ -1,6 +1,20 @@
 import { normalizeBooleanState } from "./boolean-state.js";
 
 export function verifyGoal(observation, goal) {
+  if (goal?.type === "download_receipt") {
+    // DOM visibility is never evidence of a saved PDF.
+    // Only the existing verified download executor can complete this task.
+    return {
+      completed: false,
+      reason: "verified_download_receipt_required",
+      checks: [{
+        type: "download_receipt",
+        matched: false,
+        reason: "Saved PDF receipt not yet produced."
+      }]
+    };
+  }
+
   if (!goal || typeof goal !== "object") {
     return {
       completed: false,
@@ -277,15 +291,24 @@ export function verifyGoal(observation, goal) {
     const expectedValue = String(goal.expectedValue ?? "");
 
     const fields = observation.actionableElements ?? [];
-    let matchingFields = fields.filter(element => expectedLabel &&
-      [element.label, element.name, element.placeholder]
-        .some(label => normalizeFieldLabel(label).includes(expectedLabel)));
+    const numberedCheckbox = expectedLabel.match(/^(?:the )?(?:checkbox|check box) (\d+)$/);
+    const numberedRadio = expectedLabel.match(/^(?:the )?(?:radio|radio button) (\d+)$/);
+    const numberedControl = numberedCheckbox || numberedRadio;
+    let matchingFields = numberedControl
+      ? fields.filter(element =>
+          String(element.type || '').toLowerCase() ===
+            (numberedCheckbox ? 'checkbox' : 'radio') &&
+          Number(element.ordinal) === Number(numberedControl[1])
+        )
+      : fields.filter(element => expectedLabel &&
+          [element.label, element.name, element.placeholder]
+            .some(label => normalizeFieldLabel(label).includes(expectedLabel)));
 
     // Some real HTML controls have no accessible label (e.g. an isolated
     // input[type=number], or a select showing only its option labels).
     // Resolve these only when exactly ONE compatible field exists. Never
     // guess between multiple fields or sensitive inputs.
-    if (matchingFields.length === 0) {
+    if (matchingFields.length === 0 && !numberedControl) {
       const candidates = fields.filter(element => {
         const tag = String(element.tag || '').toLowerCase();
         const type = String(element.type || '').toLowerCase();
@@ -303,7 +326,27 @@ export function verifyGoal(observation, goal) {
       // must not silently match a differently named control.
       const genericTarget = /^(?:(?:the|a)\s+)?(?:dropdown|select|option|choice|menu|number|numeric|integer|textarea|editor|description|text area)(?:\s+(?:field|input))?$|^select a dropdown$/.test(expectedLabel);
       if (candidates.length === 1 &&
-          (genericTarget || !normalizeFieldLabel(candidates[0].label)))
+          (genericTarget ||
+            !normalizeFieldLabel(candidates[0].label) ||
+            (
+              candidates.length === 1 &&
+              (() => {
+                const noun=expectedLabel.match(
+                  /^(?:the )?(?:textarea|text area)\s+([a-z0-9][a-z0-9\s]*)$/
+                )?.[1]?.trim();
+
+                return Boolean(
+                  noun && noun.length>=4 &&
+                  [candidates[0].name,candidates[0].label]
+                    .map(normalizeFieldLabel)
+                    .some(value=>
+                      value===noun ||
+                      value===noun+"s" ||
+                      noun===value+"s"
+                    )
+                );
+              })()
+            )))
         matchingFields = candidates;
     }
 

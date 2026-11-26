@@ -11,6 +11,34 @@ function ordinalOf(value) {
   return ORDINALS[lower] ?? Number(lower.replace(/(?:st|nd|rd|th)$/i, ''));
 }
 
+/**
+ * Recover only explicit numbered checkbox state directives, independently of
+ * the model's potentially incomplete list of form goals. No website labels.
+ */
+export function extractExplicitCheckboxConditions(instruction) {
+  const text = String(instruction ?? '');
+  const byIndex = new Map();
+  const ordinal = '(?:first|second|third|fourth|fifth|\\d+(?:st|nd|rd|th)?)';
+  const checkbox = '(?:checkbox|check\\s*box)';
+  const action = new RegExp(`\\b(check|tick|uncheck|untick)\\s+(?:the\\s+)?(?:(${ordinal})\\s+${checkbox}|${checkbox}\\s*(\\d{1,2}))\\b`, 'gi');
+  const preserve = new RegExp(`\\b(?:leave|keep)\\s+(?:the\\s+)?(?:(${ordinal})\\s+${checkbox}|${checkbox}\\s*(\\d{1,2}))\\s+(?:unchanged|as\\s+is|as\\s+it\\s+is)\\b`, 'gi');
+  function accept(match, raw, expectedValue) {
+    // Negated action requests do not become goals to perform the action.
+    const preceding = text.slice(Math.max(0, match.index - 40), match.index);
+    if (/\b(?:do\s+not|don't|dont|never|without|avoid)\s*$/i.test(preceding)) return;
+    const index = ordinalOf(raw);
+    if (!Number.isInteger(index) || index < 1 || index > 30) return;
+    byIndex.set(index, {type:'form_state', fieldLabel:`Checkbox ${index}`, expectedValue});
+  }
+  for (const match of text.matchAll(action)) {
+    accept(match, match[2] ?? match[3], /^(uncheck|untick)$/i.test(match[1]) ? 'unchecked':'checked');
+  }
+  for (const match of text.matchAll(preserve)) {
+    accept(match, match[1] ?? match[2], 'unchanged');
+  }
+  return [...byIndex.values()];
+}
+
 export function deriveExplicitOutcomeGoal(instruction, formControls = []) {
   const text = String(instruction ?? '');
   // A prohibited action must never be accidentally promoted into the goal.
@@ -26,25 +54,12 @@ export function deriveExplicitOutcomeGoal(instruction, formControls = []) {
       return {type:'element_count', label:count[2].trim().replace(/["'“”]/g,''), expectedValue:String(amount)};
   }
 
-  // Ordinal checkbox controls have no HTML labels on many demo pages.
-  // Protect "leave unchanged" with a recorded initial state, not a guess.
-  const conditions = [];
-  const checkboxPattern = /\b(check|tick|uncheck|untick)\s+(?:the\s+)?(first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+checkbox\b/gi;
-  for (const match of text.matchAll(checkboxPattern)) {
-    const index = ordinalOf(match[2]);
-    if (!Number.isInteger(index) || index < 1 || index > 30) continue;
-    conditions.push({type:'form_state',fieldLabel:`Checkbox ${index}`,
-      expectedValue:/^(uncheck|untick)$/i.test(match[1]) ? 'unchecked' : 'checked'});
-  }
-  const unchangedPattern = /\b(?:leave|keep)\s+(?:the\s+)?(first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+checkbox\s+(?:unchanged|as\s+is|as\s+it\s+is)\b/gi;
-  for (const match of text.matchAll(unchangedPattern)) {
-    const index = ordinalOf(match[1]);
-    if (!Number.isInteger(index) || index < 1 || index > 30) continue;
-    conditions.push({type:'form_state',fieldLabel:`Checkbox ${index}`,expectedValue:'unchanged'});
-  }
+  // Preserve explicit checkbox states even when the model omits them.
+  // The interpreter merges these with other field goals rather than dropping
+  // unrelated requested edits.
+  const conditions = extractExplicitCheckboxConditions(text);
   if (conditions.length) {
-    const unique = new Map(conditions.map(item => [item.fieldLabel, item]));
-    return unique.size === 1 ? [...unique.values()][0] : {type:'all_of', conditions:[...unique.values()]};
+    return conditions.length === 1 ? conditions[0] : {type:'all_of', conditions};
   }
 
   // A final dropdown selection is the terminal goal even when its navigation

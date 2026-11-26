@@ -61,7 +61,8 @@ export async function settleAsyncAction({
   observer,
   before,
   goal,
-  timeoutMs = 1800
+  timeoutMs = 1800,
+  inspectOutcome = null
 }) {
   const deadline = Date.now() + timeoutMs;
 
@@ -80,6 +81,18 @@ export async function settleAsyncAction({
       );
 
       lastProgress = progress;
+
+      if (!progress.goalCompleted && typeof inspectOutcome === 'function') {
+        const proof = inspectOutcome(observed.observation);
+        if (proof?.completed === true) {
+          return {
+            status: 'goal_settled',
+            progress: { ...progress, classification:'goal_completed', goalCompleted:true, goalProgress:true },
+            observation: observed.observation,
+            verification: proof.verification
+          };
+        }
+      }
 
       if (
         !progress.goalCompleted &&

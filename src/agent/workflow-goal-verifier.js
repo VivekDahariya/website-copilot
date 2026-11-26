@@ -35,7 +35,11 @@ export function createWorkflowGoalVerifier(goal, instruction = '') {
   // A prohibition is not a request to perform an action.
   // For example, "Do not submit" must not require submission.
   const positiveInstruction = String(instruction).replace(
-    /\b(?:do\s+not|don't|dont|never|must\s+not|should\s+not|without)\s+(?:the\s+)?(?:save|submit|publish|send|delete|purchase|transfer|saving|submitting|publishing|sending|deleting|purchasing|transferring)\b/gi,
+    /\b(?:do\s+not|don't|dont|never|must\s+not|should\s+not|without)\s+(?:click\s+(?:on\s+)?)?(?:the\s+)?(?:save|submit|publish|send|delete|purchase|transfer|saving|submitting|publishing|sending|deleting|purchasing|transferring)\b/gi,
+    ""
+  ).replace(
+    // Saving a picture to the media folder is not saving a form.
+    /\b(?:save|store)\s+(?:(?!(?:and|then|or)\b)\w+\s+){0,4}?(?:images?|pictures?|photos?|pics?|logos?|icons?|banners?|thumbnails?|wallpapers?|avatars?|screenshots?|screen\s*shots?|screen\s*captures?)\b/gi,
     ""
   );
 
@@ -47,6 +51,7 @@ export function createWorkflowGoalVerifier(goal, instruction = '') {
   let finalizingActionObserved = false;
   let lastObservation = null;
   let finalStateTransitionVerified = false;
+  let submissionConfirmationVerified = false;
 
   const finalConditions = conditions.filter(
     condition => condition.type === "visible_content"
@@ -61,6 +66,18 @@ export function createWorkflowGoalVerifier(goal, instruction = '') {
   }
 
   return {
+    recordConfirmedSubmission(proof) {
+      // Only browser-observed evidence can satisfy a finalizing action.
+      // Explicit destination/content goals must still be verified normally.
+      if (!finalizingActionObserved ||
+          finalConditions.length !== 0 ||
+          proof?.verified !== true ||
+          proof?.kind !== 'form_submission_confirmation') return false;
+      finalStateTransitionVerified = true;
+      submissionConfirmationVerified = true;
+      this.awaitingFinalState = false;
+      return true;
+    },
     recordHumanHandover(action, element, proof) {
       if (
         proof?.verified !== true ||
@@ -141,6 +158,7 @@ export function createWorkflowGoalVerifier(goal, instruction = '') {
 
         // Existing success evidence cannot prove this action succeeded.
         finalStateTransitionVerified = false;
+        submissionConfirmationVerified = false;
 
         // Only a later observation may establish a new final state.
         this.awaitingFinalState = !finalStateSatisfied(lastObservation);
@@ -260,7 +278,7 @@ export function createWorkflowGoalVerifier(goal, instruction = '') {
         const confirmedByFinalTransition =
           finalizingActionObserved &&
           finalStateTransitionVerified &&
-          finalStateSatisfied(observation);
+          (submissionConfirmationVerified || finalStateSatisfied(observation));
 
         return {
           completed:

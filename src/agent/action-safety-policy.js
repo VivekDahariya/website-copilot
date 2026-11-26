@@ -76,11 +76,20 @@ export function classifyBrowserAction(
   }
 
   if (
-    !["click", "fill", "select", "check", "uncheck", "press", "scroll", "navigate", "right_click", "drag", "set_range"].includes(operation)
+    !["click", "fill", "select", "check", "uncheck", "press", "scroll", "navigate", "right_click", "drag", "set_range", "hover", "save_image"].includes(operation)
   ) {
     return {
       classification: "blocked",
       reason: `Unrecognized operation: ${operation}`
+    };
+  }
+
+  // Saving a picture the page shows only copies it into the local media
+  // folder. Credential handling above still takes precedence.
+  if (operation === "save_image") {
+    return {
+      classification: "safe",
+      reason: "Saving a visible picture to the local media folder."
     };
   }
 
@@ -99,21 +108,23 @@ export function classifyBrowserAction(
 
   // The executor recomputes this from the LIVE form. GET-only search
   // submissions are read-only; never treat this as approval for other forms.
-  if (["click", "press"].includes(operation) &&
-      isVerifiedSearchSubmission(element)) {
+  if (operation === "click" && isVerifiedSearchSubmission(element)) {
     return { classification: "safe", reason: "Verified read-only search form." };
   }
 
-  // Keyboard shortcuts can trigger submission or destructive actions.
+  // Treat modifier+Enter and Space on a submit button as possible submits.
+  // A search label alone never exempts a keyboard action: only the live
+  // executor's verified GET-only search context may do so.
   if (operation === "press") {
-    const key = normalize(action.value).toLowerCase();
+    const key = normalize(action.value).toLowerCase().replace(/\s+/g, "");
+    const enterKey = /(?:^|\+)(?:enter|numpadenter)$/.test(key);
+    const submitSpace = /(?:^|\+)(?:space|spacebar)$/.test(key) &&
+      element.submitControl === true;
 
-    if (
-      /^(enter|numpadenter)$/.test(key) ||
-      /^(control|meta)\\+enter$/.test(key)
-    ) {
+    if (enterKey || submitSpace) {
       if (
-        /^(enter|numpadenter)$/.test(key) &&
+        (key === "enter" || key === "numpadenter" ||
+         (submitSpace && (key === "space" || key === "spacebar"))) &&
         isVerifiedSearchSubmission(element)
       ) {
         return {
@@ -214,7 +225,7 @@ export function classifyBrowserAction(
     };
   }
 
-  if (["click", "right_click", "drag"].includes(operation)) {
+  if (["click", "right_click", "drag", "hover"].includes(operation)) {
     return {
       classification: "safe",
       reason: "Ordinary browser interaction."
