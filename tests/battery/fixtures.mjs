@@ -13,7 +13,9 @@ const page = (title, body) =>
 const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export async function createFixtureSite() {
-  const state = { submissions: [], deleted: false };
+  // `visits` lists the pages the browser really requested, in order, so a case can
+  // check from the site that a page was visited, not from what the agent says.
+  const state = { submissions: [], deleted: false, visits: [] };
   const pages = {
     '/': page('Acme Studio', '<h1>Acme Studio</h1><p>Welcome to Acme Studio. We build small tools for teams.</p>'),
     '/products': page('Products - Acme', '<h1>Products</h1><ul><li><a href="/products/widget">Widget</a></li><li><a href="/products/gadget">Gadget</a></li></ul>'),
@@ -67,6 +69,7 @@ export async function createFixtureSite() {
       return;
     }
     if (pages[path]) {
+      state.visits.push(path);
       const pause = path === '/reports' ? Number(process.env.COPILOT_BATTERY_SLOW_MS ?? 4000) : 0;
       return pause > 0 ? void setTimeout(() => send(200, pages[path]), pause) : send(200, pages[path]);
     }
@@ -81,7 +84,7 @@ export async function createFixtureSite() {
   });
   return {
     base, deadBase, state,
-    reset() { state.submissions.length = 0; state.deleted = false; },
+    reset() { state.submissions.length = 0; state.deleted = false; state.visits.length = 0; },
     close: () => new Promise(resolve => server.close(resolve))
   };
 }

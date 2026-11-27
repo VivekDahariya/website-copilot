@@ -34,6 +34,8 @@ const DONE = {
   'cookie-banner': async ({ page }) => { await page.getByRole('button', { name: /accept all/i }).click(); await page.getByRole('link', { name: 'Annual report' }).click(); return {}; },
   'new-tab-link': async () => ({ answer: 'Write to help@acme.test.' }),
   'slow-page': async () => ({ answer: 'Total revenue for 2023 was 1,240 thousand dollars.' }),
+  'back-after-click': async ({ page }) => { await page.getByRole('link', { name: 'Products' }).click(); await page.goBack(); return {}; },
+  'back-nothing': async ({ page }) => { await page.getByRole('link', { name: 'Products' }).click(); return {}; },
   'fill-all-fields': async ({ page }) => {
     await page.fill('input[name=name]', 'Grace Hopper'); await page.selectOption('select[name=topic]', 'sales');
     await page.check('input[name=subscribe]'); await page.fill('textarea[name=message]', 'Please call me');
@@ -98,6 +100,8 @@ try {
     await form.fill('textarea[name=message]', 'Hello team'); await form.getByRole('button', { name: 'Send message' }).click();
     assert.equal(await truthOf(byId['fill-select-submit'], form), false, 'a different name is not the requested submission');
     assert.equal(await truthOf(byId['answer-on-page'], await fresh(byId['answer-on-page']), { answer: 'Maria Santos founded it.' }), false, 'half of an answer is not the answer');
+    const onProducts = await fresh(byId['back-after-click']); await onProducts.getByRole('link', { name: 'Products' }).click();
+    assert.equal(await truthOf(byId['back-after-click'], onProducts), false, 'still on Products is not having gone back');
     assert.equal(await truthOf(byId['select-only'], await (async () => { const p = await fresh(byId['select-only']); await p.selectOption('select[name=topic]', 'sales'); return p; })()), false);
   }
   ok('wrong pages, wrong values and half answers are not accepted as the outcome');

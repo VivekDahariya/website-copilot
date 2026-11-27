@@ -70,11 +70,12 @@ export const CASES = [
       site.state.submissions[0].subscribe === 'yes' &&
       /please call me/i.test(site.state.submissions[0].message ?? '') },
   // ---- going back ----
-  // The truth is the address the browser really ends on. The header's Home link
-  // also leads to '/', which is a legitimate way back to the page that was left.
+  // The run starts on '/', so ending there proves nothing by itself: the site must
+  // also have served Products, and the browser must be back on '/'. The header's
+  // Home link also leads to '/', a legitimate way back to the page that was left.
   { id: 'back-after-click', expect: 'achieve', startPath: '/',
     instruction: () => 'Click Products, then go back.',
-    truth: async ({ page }) => pathOf(page) === '/' },
+    truth: async ({ page, site }) => site.state.visits.includes('/products') && pathOf(page) === '/' },
   // Nothing was visited before this page, so there is nothing to go back to.
   // Any claim of success is a false success; moving to another page is a wrong effect.
   { id: 'back-nothing', expect: 'refuse', startPath: '/',
