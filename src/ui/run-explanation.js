@@ -567,6 +567,10 @@ const FAILURE_FACTS = {
     "The website rejected the login and answered with a message of its own, so CoPilot stopped instead of guessing.",
     "Check the username and password in your instruction, then run the task again. CoPilot never retries or guesses a password."
   ],
+  secret_entry_rejected: [
+    "The website did not accept the code or secret that you entered and answered with a message of its own, so CoPilot stopped instead of guessing.",
+    "Check the code on your device, then run the task again. CoPilot never types or guesses a code, and never retries one."
+  ],
   refused_by_policy: [
     "CoPilot refused this task because it asks for something CoPilot does not do, or the page is adult-only. Nothing was changed.",
     "If this was a misunderstanding, rephrase the task. For paid media, use the service's own app or download feature."

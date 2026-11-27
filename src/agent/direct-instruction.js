@@ -689,6 +689,12 @@ export function verifyDirectCompletion({
   relevant("action_effects_still_visible", verifiedOperations.some(
     operation => operation === "check" || operation === "uncheck"));
   const operations = new Set(done.map(entry => entry.decision?.operation));
+  // A secret the person typed (password, one-time code) after the run checked
+  // that the field really holds something is a filled field, for "enter the code".
+  if (done.some(entry => entry.decision?.operation === "human_handover" &&
+      entry.execution?.performedBy === "user" && entry.execution?.verified === true)) {
+    operations.add("fill");
+  }
   const urlChanged = done.some(entry =>
     entry.execution?.previousUrl && entry.execution?.urlAfter &&
     entry.execution.previousUrl !== entry.execution.urlAfter);

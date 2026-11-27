@@ -100,7 +100,7 @@ function getAllowedOperations(element, rejectedActions, hoverAllowed = false, ri
   return operations;
 }
 
-function isSensitiveField(element) {
+export function isSensitiveField(element) {
   const description = [
     element.label,
     element.type,

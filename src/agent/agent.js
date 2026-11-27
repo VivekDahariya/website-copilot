@@ -41,7 +41,7 @@ import { readPageMessages, newMessages, cleanMessage } from "./login-outcome.js"
 import { saveScreenshot } from "../executor/screenshot-save.js";
 import { screenshotRequest, keyPressesOwed } from "./direct-instruction.js";
 import { normalizedKey } from "./instruction-steps.js";
-import { decideNextAction } from "./local-reasoner.js";
+import { decideNextAction, isSensitiveField } from "./local-reasoner.js";
 import { createFormFastPathSession, proposeFormBatch, proposeGroundedFormBatch, eligibleForFormFastPath, validateFormBatch } from "./form-fast-path.js";
 import { createTabContext } from "./tab-context.js";
 import { mayReactLate, waitForLateReaction } from "./late-reaction.js";
@@ -422,16 +422,19 @@ export async function runAgent(
     if (pendingLoginCheck !== null) {
       const check = pendingLoginCheck;
       pendingLoginCheck = null;
+      // A password field, or a field for a code or other secret, still on the page.
       const formStillOpen = (observation.actionableElements ?? []).some(element =>
-        String(element.type ?? "").toLowerCase() === "password");
+        String(element.type ?? "").toLowerCase() === "password" ||
+        (check.secret === true && isSensitiveField(element)));
       if (formStillOpen) {
         const message = cleanMessage(newMessages(
           check.before, await readPageMessages(page).catch(() => []))[0]);
         if (message) {
           console.log("Login rejected by the site:", message);
-          emitAgentEvent("login_rejected", { message, url: page.url() });
+          emitAgentEvent(check.secret === true ? "secret_entry_rejected" : "login_rejected",
+            { message, url: page.url() });
           return {
-            status: "login_rejected",
+            status: check.secret === true ? "secret_entry_rejected" : "login_rejected",
             steps: history.length,
             finalUrl: page.url(),
             pageMessage: message,
@@ -1800,22 +1803,33 @@ export async function runAgent(
 
       const isPasswordHandover =
         String(element.type ?? "").toLowerCase() === "password";
+      // A one-time code, card number or similar is typed by the person into an
+      // ordinary text field. Like a password, it counts as entered only once the
+      // field really holds something. Its value is never read, only its presence.
+      const isTypedSecretField = isPasswordHandover || Boolean(handle &&
+        await handle.evaluate(node =>
+          (node instanceof HTMLInputElement &&
+            !["checkbox", "radio", "button", "submit", "reset", "file", "image", "hidden"]
+              .includes(node.type)) ||
+          node instanceof HTMLTextAreaElement
+        ).catch(() => false));
 
       let manualPasswordVerified = false;
 
-      if (isPasswordHandover) {
+      if (isTypedSecretField) {
         // Compare a specifically requested value only inside Chromium.
         // Otherwise check that the password field is populated.
         try {
             manualPasswordVerified = Boolean(
               handle &&
               page.url() === urlBeforeAction &&
-              await handle.evaluate(node =>
+              await handle.evaluate((node, passwordRequired) =>
                 node.isConnected &&
-                node instanceof HTMLInputElement &&
-                node.type === "password" &&
-                node.value.length > 0
-              )
+                (node instanceof HTMLInputElement ||
+                  node instanceof HTMLTextAreaElement) &&
+                (!passwordRequired || node.type === "password") &&
+                node.value.length > 0,
+              isPasswordHandover)
             );
           } catch {
           manualPasswordVerified = false;
@@ -1824,7 +1838,9 @@ export async function runAgent(
         if (!manualPasswordVerified) {
           return {
             status: "human_handover_unverified",
-            reason: "Manual password entry was not verified.",
+            reason: isPasswordHandover
+              ? "Manual password entry was not verified."
+              : "The value to be entered by the person was not found in the field.",
             steps: history.length,
             finalUrl: page.url(),
             history
@@ -1907,6 +1923,17 @@ export async function runAgent(
         // What the page already says, so only a response to the login counts.
         loginMessagesBefore = await readPageMessages(page).catch(() => []);
       }
+    }
+
+    // The person typed a secret (a one-time code, say) earlier in this run and
+    // this click may submit it. What the page already says is noted, so only the
+    // site's answer to the submission counts.
+    const submitsTypedSecret = directMode && !verifiedLoginSubmit &&
+      decision.operation === "click" &&
+      history.some(entry => entry.decision?.operation === "human_handover" &&
+        entry.execution?.performedBy === "user" && entry.execution?.verified === true);
+    if (submitsTypedSecret) {
+      loginMessagesBefore = await readPageMessages(page).catch(() => []);
     }
 
     if (prospectiveSearchEnter &&
@@ -2496,8 +2523,8 @@ export async function runAgent(
 
     result.previousUrl = urlBeforeAction;
 
-    if (verifiedLoginSubmit && result.executionCompleted === true) {
-      pendingLoginCheck = { before: loginMessagesBefore };
+    if ((verifiedLoginSubmit || submitsTypedSecret) && result.executionCompleted === true) {
+      pendingLoginCheck = { before: loginMessagesBefore, secret: !verifiedLoginSubmit };
     }
 
     if (newTabAfterClick && result.executionCompleted === true) {

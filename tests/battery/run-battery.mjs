@@ -49,6 +49,8 @@ export async function runCase(testCase, { browser, site, executor, maxSteps = 12
       urlLess: !testCase.startPath,
       orchestratorOptions: { agentOptions: {
         maxSteps,
+        // A stand-in person for a case that needs one (a code to be typed by hand).
+        ...(testCase.person ? { humanHandoverProvider: async ({ targetHandle }) => testCase.person(targetHandle) } : {}),
         // The real approval provider, answered the way a user would: yes for a
         // harmless request, no for one marked approve:false. Its approvals are
         // single-use tokens bound to the action, exactly as in the dashboard.

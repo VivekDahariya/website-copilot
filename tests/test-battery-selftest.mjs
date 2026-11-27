@@ -40,6 +40,9 @@ const DONE = {
   'drag-card': async ({ page }) => { await page.locator('#a').dragTo(page.locator('#done')); return {}; },
   'right-click': async ({ page }) => { await page.locator('#h').click({ button: 'right' }); return {}; },
   'scroll-bottom': async ({ page }) => { await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); return {}; },
+  'otp-handover': async ({ page }) => { await page.fill('input[name=code]', '482915'); await page.getByRole('button', { name: 'Verify' }).click(); return {}; },
+  'otp-wrong-code': async ({ page }) => { await page.goto(site.base + '/verify/done'); return {}; },
+  'otp-no-entry': async ({ page }) => { await page.goto(site.base + '/verify/done'); return {}; },
   'key-twice': async ({ page }) => { await page.locator('#name').press('Tab'); await page.locator('#name').press('Tab'); return {}; },
   'back-after-click': async ({ page }) => { await page.getByRole('link', { name: 'Products' }).click(); await page.goBack(); return {}; },
   'back-nothing': async ({ page }) => { await page.getByRole('link', { name: 'Products' }).click(); return {}; },
@@ -59,7 +62,7 @@ async function fresh(testCase) {
 
 try {
   // ---- the site itself ----
-  for (const path of ['/', '/products', '/products/widget', '/products/gadget', '/about', '/pricing', '/contact', '/account', '/resources', '/docs/guide', '/press', '/press/annual-report', '/controls/slider', '/controls/menu', '/controls/menu/contact-desk', '/controls/board', '/controls/context', '/controls/long', '/controls/keys']) {
+  for (const path of ['/', '/products', '/products/widget', '/products/gadget', '/about', '/pricing', '/contact', '/account', '/resources', '/docs/guide', '/press', '/press/annual-report', '/verify', '/verify/done', '/controls/slider', '/controls/menu', '/controls/menu/contact-desk', '/controls/board', '/controls/context', '/controls/long', '/controls/keys']) {
     assert.equal((await fetch(site.base + path)).status, 200, path);
   }
   assert.equal((await fetch(site.base + '/nothing')).status, 404);
