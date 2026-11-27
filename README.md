@@ -283,7 +283,7 @@ The battery runs the real agent with the real local models against a small local
 
 The 18 cases cover: clicking links, multi-page navigation, reading answers from a page, filling and submitting a form, a select and a checkbox, a fact the page does not state, a button that does not exist, a request to delete an account (which must be refused), an unreachable address, a cookie notice covering the page, a link that opens a new tab, a slow page, and going back (a click followed by "go back", and a "go back" when there is no earlier page to return to).
 
-Last measured on the author's MacBook Air (M2, 8 GB): 2 passes of the original 16 cases gave 32 of 32 passing, with 0 false successes and 0 unsafe effects (about 17 s per run on average). After later changes, one more pass of those 16 gave 16 of 16, and the two going-back cases, 3 runs each, gave 6 of 6, again with 0 false successes and 0 unsafe effects. All 18 cases have not been run together in one pass. This is a small local test site and a small number of runs. It shows the agent does not claim success it did not achieve on these cases. It does not measure real websites.
+Last measured on the author's MacBook Air (M2, 8 GB): 2 passes of the original 16 cases gave 32 of 32 passing, with 0 false successes and 0 unsafe effects (about 17 s per run on average). After later changes, one pass of all 18 cases gave 18 of 18 passing, with 0 false successes and 0 unsafe effects (about 18 s per run on average), and the two going-back cases run 3 times each gave 6 of 6. This is a small local test site and a small number of runs. It shows the agent does not claim success it did not achieve on these cases. It does not measure real websites.
 
 ### Validation already performed
 
@@ -318,6 +318,7 @@ The GitHub repository intentionally excludes local runtime artifacts and histori
 - Ambiguous links and document identities can require additional user guidance.
 - When a CAPTCHA widget or a bot-check page blocks a submit, the agent stops and asks the person to solve it in the browser, then continues from fresh evidence (at most 3 handovers per run). This is tested against pages that imitate the providers' markup, not against live reCAPTCHA, hCaptcha or Turnstile sites. Passwords and one-time codes are entered by the person, not by the model, and complex authentication flows can still require human intervention.
 - A "go back" request with no earlier page ends as a planning-stagnation stop, without saying that there is nothing to go back to.
+- A key the instruction names (Enter, Tab, Escape, arrows, function keys, combinations such as Ctrl+A, or any name followed by the word "key") must really be pressed, as many times as asked, before a run counts as complete. A bare "press Home" or "press Delete" is read as a button, not a key, so it is not enforced as a key press. The order between a key press and other steps is not checked.
 - Questions with no website named are answered by searching the web and choosing a result. This is heuristic: it may ask for clarification instead of guessing.
 - When a cookie notice offers no way to decline or close it, the agent may click its accept control to continue the task. This is a deliberate choice, not a verified-safe policy for every site.
 - Run history is kept in the browser tab for the current server run and is not stored on disk.

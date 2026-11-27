@@ -149,6 +149,61 @@ export function unmetSteps(instruction, history = [], { currentWords = new Set()
   return {applies: true, missing, targets, lastIndex};
 }
 
+// ---- named key presses -------------------------------------------------------
+// "Type hello and press Enter", "press the Tab key twice": a key the user names
+// needs its own verified `press` action, as many times as asked. The generic
+// verb table counts a fill as a "press", so without this the typing alone passed.
+// Only unambiguous names count as keys: "press Home" or "press Delete" may be a
+// button, so those need the word "key" after them.
+const KEY_WORD = String.raw`(?:enter|return|tab|escape|esc|backspace|page\s?up|page\s?down|arrow\s?(?:up|down|left|right)|(?:up|down|left|right)\s?arrow|f(?:[1-9]|1[0-2]))`;
+const MODIFIER = String.raw`(?:ctrl|control|shift|alt|option|cmd|command|meta)`;
+const KEY_COMBO = String.raw`${MODIFIER}(?:\s*\+\s*[a-z0-9]+)+`;
+const KEY_PRESS = new RegExp(
+  String.raw`\b(?:press|pressing|hit|hitting)\s+(?:the\s+)?(?:(${KEY_COMBO})|(${KEY_WORD})(?:\s+key)?|([a-z0-9]+)\s+key)\b` +
+  String.raw`(?:[^.,;]{0,30}?\b(once|twice|thrice|(\d+|two|three|four|five|six)\s+times?)\b)?`, "gi");
+const COUNT_WORDS = { once: 1, twice: 2, thrice: 3, two: 2, three: 3, four: 4, five: 5, six: 6 };
+const KEY_ALIAS = { return: "enter", esc: "escape", ctrl: "control", cmd: "meta", command: "meta", option: "alt" };
+
+export function normalizedKey(text) {
+  return String(text ?? "").toLowerCase().split("+").map(part => {
+    const key = part.replace(/\s+/g, "");
+    if (/^(?:arrow)?(?:up|down|left|right)(?:arrow)?$/.test(key) && key.length > 5) {
+      return "arrow" + key.replace(/arrow/, "");
+    }
+    return KEY_ALIAS[key] ?? key;
+  }).join("+");
+}
+
+// [{ key: "enter", display: "Enter", count: 1 }, ...] in the order written.
+export function keyRequirements(instruction) {
+  const found = new Map();
+  for (const match of String(instruction ?? "").matchAll(KEY_PRESS)) {
+    const display = (match[1] ?? match[2] ?? match[3]).trim();
+    const key = normalizedKey(display);
+    const amount = match[4] === undefined ? 1
+      : (COUNT_WORDS[match[4].toLowerCase()] ?? COUNT_WORDS[String(match[5] ?? "").toLowerCase()] ?? Number(match[5]) ?? 1) || 1;
+    const earlier = found.get(key);
+    if (earlier) earlier.count += amount; else found.set(key, { key, display, count: amount });
+  }
+  return [...found.values()];
+}
+
+// What is still missing: one entry per key that was pressed fewer times than asked.
+export function keyShortfall(instruction, history = []) {
+  const done = new Map();
+  for (const entry of history) {
+    if (entry?.decision?.operation === "press" && verified(entry)) {
+      const key = normalizedKey(entry.decision.value);
+      done.set(key, (done.get(key) ?? 0) + 1);
+    }
+  }
+  return keyRequirements(instruction)
+    .filter(need => (done.get(need.key) ?? 0) < need.count)
+    .map(need => need.count > 1
+      ? `press ${need.display} ${need.count} times (${done.get(need.key) ?? 0} done)`
+      : `press ${need.display}`);
+}
+
 // The same page, ignoring a #fragment and a trailing slash.
 export function sameAddress(first, second) {
   const key = value => {

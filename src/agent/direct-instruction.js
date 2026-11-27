@@ -1,4 +1,4 @@
-import { sameAddress, sequencedTargets, unmetSteps } from "./instruction-steps.js";
+import { keyRequirements, keyShortfall, sameAddress, sequencedTargets, unmetSteps } from "./instruction-steps.js";
 import { navigationPartOf } from "./webpage-answer.js";
 /**
  * Direct-instruction mode.
@@ -727,6 +727,20 @@ export function verifyDirectCompletion({
     return fail(
       `Not every step of the instruction has a verified action yet. Still to do, in order: ${steps.missing.join(", ")}.`,
       { missing: steps.missing }
+    );
+  }
+
+  // A key the user named ("press Enter", "press Tab twice") needs its own
+  // verified key press, as many times as asked. Typing is not pressing.
+  const keyPart = splitInstruction(navigationPartOf(instruction)).positive;
+  const missingKeys = keyShortfall(keyPart, history);
+  const keysDone = record("key_presses_evidenced", missingKeys.length === 0,
+    missingKeys.length ? { missing: missingKeys } : undefined);
+  relevant("key_presses_evidenced", keyRequirements(keyPart).length > 0);
+  if (!keysDone) {
+    return fail(
+      `Not every key press of the instruction has a verified action yet. Still to do: ${missingKeys.join(", ")}.`,
+      { missing: missingKeys }
     );
   }
 
