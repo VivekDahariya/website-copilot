@@ -261,6 +261,7 @@ export function buildCatalog(observation, rejectedActions = [], goal = null, tas
     options: element.options,
     draggable: element.draggable,
     contextMenuTarget: element.contextMenuTarget,
+    ...(element.range ? { range: element.range } : {}),
     ...(element.dropTarget === true ? { dropTarget: true } : {}),
     ...(element.mediaTarget === true
       ? { mediaKind: "image", mediaSize: `${element.mediaWidth ?? 0}x${element.mediaHeight ?? 0}` }
@@ -537,7 +538,7 @@ instruction in "task" and return exactly ONE next JSON action
 - hover, right_click, drag and set_range may be used only where an element
   lists them in allowedOperations. drag: ref is the item to move and value
   is the ref of the destination (an element with dropTarget true, or another
-  draggable item). set_range: value is the number for the slider. press:
+  draggable item). set_range: value is the number for the slider, between its range.min and range.max. press:
   value is one key name such as Enter, Tab, Escape or ArrowDown. scroll: ref
   is empty and value is "down" or "up" for one screen, or "bottom" or "top"
   to go all the way; only when the user asks to scroll.

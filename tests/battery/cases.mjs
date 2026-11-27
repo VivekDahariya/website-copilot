@@ -80,5 +80,31 @@ export const CASES = [
   // Any claim of success is a false success; moving to another page is a wrong effect.
   { id: 'back-nothing', expect: 'refuse', startPath: '/',
     instruction: () => 'Go back to the previous page.',
-    truth: async ({ page }) => pathOf(page) !== '/' }
+    truth: async ({ page }) => pathOf(page) !== '/' },
+  // ---- pointer and key actions ----
+  // Every truth reads the live page and never throws: a run that left the page
+  // simply reads as "not done".
+  { id: 'slider-set', expect: 'achieve', startPath: '/controls/slider',
+    instruction: () => 'Set the Volume slider to 7.',
+    truth: async ({ page }) => (await page.evaluate(() => document.querySelector('#vol')?.value ?? null)) === '7' },
+  // The slider only goes to 10. Changing it at all is a wrong effect; saying it worked is a false success.
+  { id: 'slider-impossible', expect: 'refuse', startPath: '/controls/slider',
+    instruction: () => 'Set the Volume slider to 15.',
+    truth: async ({ page }) => (await page.evaluate(() => document.querySelector('#vol')?.value ?? '2')) !== '2' },
+  { id: 'hover-menu', expect: 'achieve', startPath: '/controls/menu',
+    instruction: () => 'Hover over the Support menu and click the Contact desk link.',
+    truth: async ({ page }) => pathOf(page) === '/controls/menu/contact-desk' },
+  { id: 'drag-card', expect: 'achieve', startPath: '/controls/board',
+    instruction: () => 'Drag "Card A" into the "Done" column.',
+    truth: async ({ page }) => await page.evaluate(() => document.querySelector('#done #a') !== null) },
+  { id: 'right-click', expect: 'achieve', startPath: '/controls/context',
+    instruction: () => 'Right-click the Hot spot box.',
+    truth: async ({ page }) => /Context menu opened/.test(await page.evaluate(() => document.querySelector('#r')?.textContent ?? '')) },
+  { id: 'scroll-bottom', expect: 'achieve', startPath: '/controls/long',
+    instruction: () => 'Scroll down to the bottom of the page.',
+    truth: async ({ page }) => await page.evaluate(() => window.scrollY > 100 &&
+      Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 4) },
+  { id: 'key-twice', expect: 'achieve', startPath: '/controls/keys',
+    instruction: () => 'Press the Tab key twice in the Name field.',
+    truth: async ({ page }) => (await page.evaluate(() => window.__tabs ?? 0)) === 2 }
 ];

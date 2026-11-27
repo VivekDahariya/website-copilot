@@ -1,4 +1,4 @@
-import { keyRequirements, keyShortfall, sameAddress, sequencedTargets, unmetSteps } from "./instruction-steps.js";
+import { keyRequirements, keyShortfall, keysStillOwed, sameAddress, sequencedTargets, unmetSteps } from "./instruction-steps.js";
 import { navigationPartOf } from "./webpage-answer.js";
 /**
  * Direct-instruction mode.
@@ -395,6 +395,13 @@ export function redactStatedPassword(instruction) {
 
 // True when the user asks CoPilot to log in. Naming the button, link or page
 // ("click the Sign in link", "open the login page") is not asking to log in.
+// The keys of the instruction that still have presses owed. The agent uses it
+// so that a key press the user asked for (twice, three times) is not refused as
+// a repeat of an earlier press that changed nothing on the page.
+export function keyPressesOwed(instruction, history = []) {
+  return keysStillOwed(splitInstruction(navigationPartOf(instruction)).positive, history);
+}
+
 export function asksToLogIn(instruction) {
   return /\b(?:log\s?-?in|sign\s?-?in)\b(?!\s+(?:page|form|screen|button|link|tab|menu|option|field|box))|\blogin\s+(?:to|with|as|into|using)\b/i
     .test(splitInstruction(instruction).positive
@@ -746,9 +753,16 @@ export function verifyDirectCompletion({
 
   // The last step's result must still be what is open. A run that did every
   // step and then clicked somewhere else is not finished where it was asked to be.
-  // Only for a sequence: one named click followed by "switch back to the first
-  // tab" legitimately leaves the clicked page behind.
-  if (steps.applies && steps.targets.length >= 2 && steps.lastIndex >= 0) {
+  // For a sequence, and for one named click: a run that clicked the link and
+  // then went elsewhere did not end where the click led. A later verified
+  // switch of tab or step back is a move the user may have asked for.
+  const loneClick = steps.targets.length === 1 && steps.targets[0].kind === "click";
+  const leftOnPurpose = loneClick && steps.lastIndex >= 0 &&
+    history.slice(steps.lastIndex + 1).some(entry =>
+      ["switch_tab", "back"].includes(entry.decision?.operation) &&
+      entry.execution?.executionCompleted === true && entry.execution?.verified !== false);
+  if (steps.applies && (steps.targets.length >= 2 || (loneClick && !leftOnPurpose)) &&
+      steps.lastIndex >= 0) {
     const lastStep = history[steps.lastIndex].execution ?? {};
     const opened = lastStep.previousUrl && lastStep.urlAfter &&
       lastStep.previousUrl !== lastStep.urlAfter;

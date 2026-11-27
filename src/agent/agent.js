@@ -39,7 +39,8 @@ import {
 } from "./action-approval.js";
 import { readPageMessages, newMessages, cleanMessage } from "./login-outcome.js";
 import { saveScreenshot } from "../executor/screenshot-save.js";
-import { screenshotRequest } from "./direct-instruction.js";
+import { screenshotRequest, keyPressesOwed } from "./direct-instruction.js";
+import { normalizedKey } from "./instruction-steps.js";
 import { decideNextAction } from "./local-reasoner.js";
 import { createFormFastPathSession, proposeFormBatch, proposeGroundedFormBatch, eligibleForFormFastPath, validateFormBatch } from "./form-fast-path.js";
 import { createTabContext } from "./tab-context.js";
@@ -260,6 +261,7 @@ export async function runAgent(
   let blockedClickRecoveries = 0;
   let overlayBlocked = false;
   let mediaSaveFailures = 0;
+  let rangeRejections = 0;
   let pageChangedRecoveries = 0;
   let screenshotFailures = 0;
   // Set after a login button was pressed; checked on the next observation.
@@ -1233,6 +1235,16 @@ export async function runAgent(
           ? String(observation.actionableElements.find(
               item => item.ref === candidate.value)?.label ?? '')
           : '';
+        // References are renumbered after every move (the drop zones swap
+        // places), so the same two places are recognised by their names. Where
+        // a name is not unique on the page, the references must match as well.
+        const dragPair = (first, second) =>
+          [String(first ?? ''), String(second ?? '')].sort().join('>');
+        const namedPair = dragPair(element.label, dragDestinationLabel);
+        const namesAreUnique = candidate.operation !== 'drag' || (
+          element.label && dragDestinationLabel &&
+          observation.actionableElements.filter(item =>
+            [element.label, dragDestinationLabel].includes(item.label)).length === 2);
         const repeatsOwnDrag = directMode && !constraintViolation &&
           candidate.operation === 'drag' &&
           history.some(entry =>
@@ -1240,10 +1252,10 @@ export async function runAgent(
             entry.execution?.executionCompleted === true &&
             entry.execution?.verified === true &&
             entry.execution?.urlAfter === observation.url &&
-            [entry.decision.ref, entry.decision.value].sort().join('>') ===
-              [candidate.ref, candidate.value].sort().join('>') &&
-            [entry.targetLabel ?? '', entry.destinationLabel ?? ''].sort().join('>') ===
-              [String(element.label ?? ''), dragDestinationLabel].sort().join('>'));
+            dragPair(entry.targetLabel, entry.destinationLabel) === namedPair &&
+            (namesAreUnique ||
+              dragPair(entry.decision.ref, entry.decision.value) ===
+                dragPair(candidate.ref, candidate.value)));
         if (repeatsOwnDrag) {
           console.log('Rejected action that repeats or reverses a verified drag.');
           rejectedActions.push(candidate);
@@ -1372,7 +1384,13 @@ export async function runAgent(
           continue;
         }
 
+        // A key press the user asked for several times ("press Tab twice") often
+        // changes nothing on the page. It is not ineffective while presses are owed.
+        const keyPressOwed = directMode && candidate.operation === 'press' &&
+          keyPressesOwed(originalInstruction, history)
+            .has(normalizedKey(candidate.value));
         if (
+          !keyPressOwed &&
           stagnationRecovery.isIneffective(
             observation,
             element,
@@ -1397,7 +1415,8 @@ export async function runAgent(
           candidate
         );
 
-        if (!progressCheck.allowed) {
+        // Owed key presses are bounded by the number the user asked for.
+        if (!progressCheck.allowed && !keyPressOwed) {
           console.log(
             "Progress guard rejected:",
             progressCheck.reason,
@@ -2346,6 +2365,42 @@ export async function runAgent(
           },
           progress: { classification:'action_blocked', goalCompleted:false }
         });
+        continue;
+      }
+      // A slider value outside the slider's range (or not a number) was refused
+      // BEFORE anything changed. Record it as a failed action the planner can see;
+      // a second one ends the run and says what the range is. Never a success.
+      if (error?.code === 'RANGE_VALUE_INVALID' && decision.operation === 'set_range') {
+        rangeRejections += 1;
+        stagnationRecovery.remember(observation, element, decision);
+        console.log('Slider value refused:', String(error.message).slice(0, 160));
+        emitAgentEvent('action_failed', {
+          operation: 'set_range', ref: decision.ref,
+          reason: 'range_value_invalid', url: page.url()
+        });
+        history.push({
+          step,
+          targetLabel: element?.label ?? '',
+          decision: { ref: decision.ref, operation:'set_range', value: String(decision.value ?? '').slice(0, 20) },
+          execution: {
+            operation:'set_range', executionCompleted:false,
+            verified:false, errorCode:'RANGE_VALUE_INVALID',
+            errorDetail: `allowed ${error.range?.min} to ${error.range?.max}`,
+            previousUrl:urlBeforeAction, urlAfter:page.url()
+          },
+          progress: { classification:'action_blocked', goalCompleted:false }
+        });
+        if (rangeRejections >= 2) {
+          return {
+            status: "stagnation_detected",
+            steps: history.length,
+            finalUrl: page.url(),
+            reason:
+              `The slider cannot be set to ${JSON.stringify(error.requested ?? '')}: ` +
+              `it accepts numbers from ${error.range?.min} to ${error.range?.max}. Nothing was changed.`,
+            history
+          };
+        }
         continue;
       }
       // The click was performed but the page it opened never began to load.

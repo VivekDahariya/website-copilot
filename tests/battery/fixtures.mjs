@@ -29,6 +29,22 @@ export async function createFixtureSite() {
       '<p><label><input type="checkbox" name="subscribe" value="yes"> Subscribe to the newsletter</label></p>' +
       '<p><label>Message <textarea name="message"></textarea></label></p>' +
       '<p><button type="submit">Send message</button></p></form>'),
+    // Pages for pointer and key actions. Each is reached by its own address.
+    '/controls/slider': page('Sound - Acme', '<h1>Sound</h1><label for="vol">Volume</label><input id="vol" type="range" min="0" max="10" value="2"><p>Volume: <span id="out">2</span></p>' +
+      '<script>vol.addEventListener(\'input\', () => { out.textContent = vol.value; })</script>'),
+    '/controls/menu': page('Help menu - Acme', '<h1>Help</h1><style>.menu ul{display:none;margin:0;padding:0}.menu:hover ul{display:block}</style>' +
+      '<div class="menu"><button type="button">Support menu</button><ul><li><a href="/controls/menu/contact-desk">Contact desk</a></li></ul></div>'),
+    '/controls/menu/contact-desk': page('Contact desk - Acme', '<h1>Contact desk</h1><p>The desk is open on weekdays.</p>'),
+    '/controls/board': page('Board - Acme', '<h1>Board</h1><style>.col{border:1px solid #333;min-height:80px;width:200px;display:inline-block;vertical-align:top;margin:8px;padding:8px}</style>' +
+      '<div class="col" id="todo" aria-label="To do"><h2>To do</h2><div id="a" draggable="true">Card A</div></div>' +
+      '<div class="col" id="done" aria-label="Done"><h2>Done</h2></div>' +
+      '<script>a.addEventListener(\'dragstart\', e => e.dataTransfer.setData(\'text\', \'a\'));' +
+      'for (const c of document.querySelectorAll(\'.col\')) { c.addEventListener(\'dragover\', e => e.preventDefault()); c.addEventListener(\'drop\', e => { e.preventDefault(); c.appendChild(a); }); }</script>'),
+    '/controls/context': page('Context - Acme', '<h1>Context</h1><div id="h" style="width:200px;height:80px;border:2px dashed #333" role="button" tabindex="0">Hot spot</div><p id="r"></p>' +
+      '<script>h.addEventListener(\'contextmenu\', e => { e.preventDefault(); r.textContent = \'Context menu opened\'; })</script>'),
+    '/controls/long': page('Long page - Acme', '<h1>Long page</h1><div style="height:3000px">Start of the page</div><p>Last line of the page</p>'),
+    '/controls/keys': page('Keys - Acme', '<h1>Keys</h1><p><label>Name <input id="name" type="text"></label></p>' +
+      '<script>window.__tabs = 0; document.addEventListener(\'keydown\', e => { if (e.key === \'Tab\') window.__tabs += 1; }, true)</script>'),
     // Hard-situation pages. They are reached from /resources, /press or their own
     // address, so the original cases and their navigation are unchanged.
     '/resources': page('Resources - Acme', '<h1>Resources</h1><ul>' +

@@ -533,18 +533,24 @@ export async function executeAction(
       await handle.click({button:'right', timeout:3500});
       break;
     case "set_range": {
-      const updated = await handle.evaluate((element, requested) => {
-        const n = Number(requested);
-        if (!Number.isFinite(n)) return false;
+      // Nothing is changed unless the value is a number inside the slider's own
+      // range. The error carries the real range so the run can say what is allowed.
+      const outcome = await handle.evaluate((element, requested) => {
         const min = element.min === '' ? 0 : Number(element.min);
         const max = element.max === '' ? 100 : Number(element.max);
-        if (n < min || n > max) return false;
+        const n = Number(requested);
+        if (String(requested ?? '').trim() === '' || !Number.isFinite(n)) return { ok: false, min, max, why: 'not a number' };
+        if (n < min || n > max) return { ok: false, min, max, why: 'outside the range' };
         element.value = String(n);
         element.dispatchEvent(new Event('input', {bubbles:true}));
         element.dispatchEvent(new Event('change', {bubbles:true}));
-        return true;
+        return { ok: true };
       }, value);
-      if (!updated) throw new Error('Invalid or out-of-range slider value.');
+      if (!outcome.ok) {
+        throw Object.assign(
+          new Error(`RANGE_VALUE_INVALID: ${JSON.stringify(String(value ?? '').slice(0, 20))} is ${outcome.why} (allowed ${outcome.min} to ${outcome.max}).`),
+          { code: 'RANGE_VALUE_INVALID', range: { min: outcome.min, max: outcome.max }, requested: String(value ?? '').slice(0, 20) });
+      }
       break;
     }
     case "drag": {

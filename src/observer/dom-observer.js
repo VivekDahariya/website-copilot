@@ -372,6 +372,12 @@ export async function observePage(page) {
             .trim().replace(/\s+/g, " ").slice(0, 80),
           withinModal: Boolean(element.closest('[role="dialog"],.modal,[class*="modal"]')),
           contextMenuTarget: Boolean(element.oncontextmenu),
+          // A slider's allowed values, so a value outside them is never proposed.
+          ...(element.getAttribute("type") === "range" ? { range: {
+            min: element.min === "" ? 0 : Number(element.min),
+            max: element.max === "" ? 100 : Number(element.max),
+            step: element.step === "any" ? "any" : (Number(element.step) > 0 ? Number(element.step) : 1)
+          } } : {}),
           // What a picture is called: its description, or its file name.
           imageAlt: tag === "img"
             ? (element.getAttribute("alt") || element.getAttribute("title") || "")

@@ -86,10 +86,13 @@ export function sequencedTargets(instruction) {
 const verified = entry =>
   entry?.execution?.executionCompleted === true && entry?.execution?.verified !== false;
 
-function matches(target, entry, earlier = []) {
+// How well one executed action fits a named step: 2 = the label (or the page it
+// opened) carries every word of the name; 1 = the label is only part of the
+// name (the instruction added words around the label); 0 = no fit.
+function matchStrength(target, entry, earlier = []) {
   const operation = entry?.decision?.operation;
   if (target.kind === "back") {
-    if (operation === "back" || operation === "switch_tab") return true;
+    if (operation === "back" || operation === "switch_tab") return 2;
     // A click is "going back" only when it landed on a page the run had
     // already left (an in-page "Back to home" link). A click that went on to
     // somewhere new is not.
@@ -97,21 +100,20 @@ function matches(target, entry, earlier = []) {
     return operation === "click" && Boolean(reached) &&
       entry.execution.previousUrl !== reached &&
       earlier.some(prior => prior?.execution?.previousUrl &&
-        sameAddress(prior.execution.previousUrl, reached));
+        sameAddress(prior.execution.previousUrl, reached)) ? 2 : 0;
   }
-  if (operation !== "click") return false;
+  if (operation !== "click") return 0;
   const wanted = new Set(target.name);
-  const sharing = text => {
-    const have = nameTokens(text);
-    return have.length > 0 &&
-      (target.name.every(word => have.includes(word)) || have.every(word => wanted.has(word)));
-  };
+  const have = nameTokens(entry.targetLabel ?? "");
   let path = "";
   try { path = decodeURIComponent(new URL(entry.execution?.urlAfter ?? "").pathname); } catch { path = ""; }
-  return sharing(entry.targetLabel ?? "") ||
-    (entry.execution?.previousUrl !== entry.execution?.urlAfter &&
-      target.name.every(word => nameTokens(path).includes(word)));
+  if ((have.length > 0 && target.name.every(word => have.includes(word))) ||
+      (entry.execution?.previousUrl !== entry.execution?.urlAfter &&
+        target.name.every(word => nameTokens(path).includes(word)))) return 2;
+  return have.length > 0 && have.every(word => wanted.has(word)) ? 1 : 0;
 }
+
+const matches = (target, entry, earlier = []) => matchStrength(target, entry, earlier) > 0;
 
 // Which named steps have no verified action yet, in the order written.
 // `currentWords` are the stemmed words of the open page's address, title and
@@ -133,8 +135,15 @@ export function unmetSteps(instruction, history = [], { currentWords = new Set()
     if (isLast) {
       // The result of the final step is what the run must end on, so the
       // latest matching action counts (the run may have repeated it).
-      for (let index = history.length - 1; index >= from; index -= 1) {
-        if (verified(history[index]) && matches(target, history[index], history.slice(0, index))) { found = index; break; }
+      // A click whose label carries the whole name outranks one that carries
+      // only part of it ("Contact" is not the "Contact desk" link), however
+      // late the partial one came.
+      for (const strength of [2, 1]) {
+        for (let index = history.length - 1; index >= from && found < 0; index -= 1) {
+          if (verified(history[index]) &&
+              matchStrength(target, history[index], history.slice(0, index)) === strength) found = index;
+        }
+        if (found >= 0) break;
       }
     } else {
       for (let index = from; index < history.length; index += 1) {
@@ -188,8 +197,7 @@ export function keyRequirements(instruction) {
   return [...found.values()];
 }
 
-// What is still missing: one entry per key that was pressed fewer times than asked.
-export function keyShortfall(instruction, history = []) {
+function pressesDone(history) {
   const done = new Map();
   for (const entry of history) {
     if (entry?.decision?.operation === "press" && verified(entry)) {
@@ -197,6 +205,20 @@ export function keyShortfall(instruction, history = []) {
       done.set(key, (done.get(key) ?? 0) + 1);
     }
   }
+  return done;
+}
+
+// The keys the instruction asked for that have been pressed fewer times than asked.
+export function keysStillOwed(instruction, history = []) {
+  const done = pressesDone(history);
+  return new Set(keyRequirements(instruction)
+    .filter(need => (done.get(need.key) ?? 0) < need.count)
+    .map(need => need.key));
+}
+
+// What is still missing: one entry per key that was pressed fewer times than asked.
+export function keyShortfall(instruction, history = []) {
+  const done = pressesDone(history);
   return keyRequirements(instruction)
     .filter(need => (done.get(need.key) ?? 0) < need.count)
     .map(need => need.count > 1
