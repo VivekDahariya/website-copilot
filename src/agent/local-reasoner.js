@@ -227,6 +227,8 @@ export function buildCatalog(observation, rejectedActions = [], goal = null, tas
     [...pictures].sort((a, b) => a.mediaOrdinal - b.mediaOrdinal)
       .slice(0, 2).forEach(element => featuredPictures.add(element.ref));
   }
+  const overlayNames = new Set((observation.overlayControls ?? [])
+    .map(name => String(name).toLowerCase().trim()));
   const candidates = relevantRanked.map(element => {
     const label = String(element.label ?? "").toLowerCase().trim();
     const href = String(element.href ?? "").toLowerCase();
@@ -240,6 +242,7 @@ export function buildCatalog(observation, rejectedActions = [], goal = null, tas
       (preferSearch && searchInput(element) ? 220 : 0) +
       (preferSearch && searchSubmit(element) ? 150 : 0) +
       (essentialControl ? 8 : 0) +
+      (overlayNames.has(label.slice(0, 60)) ? 300 : 0) +
       (featuredPictures.has(element.ref) ? 400 : 0) };
   }).sort((a,b) => b.priority - a.priority);
   // A small semantic catalog fits Qwen's context and includes search
@@ -324,6 +327,18 @@ export async function decideNextAction(
   goal = null,
   verification = null
 ) {
+  // A click was covered by a dialog or banner and nothing has gone through
+  // since: the controls that notice offers (named in the record of that click)
+  // must stay choosable, however little they have to do with the task's words.
+  const overlayControls = (() => {
+    for (let index = (history ?? []).length - 1; index >= 0; index -= 1) {
+      const entry = history[index];
+      if (entry?.execution?.executionCompleted === true) return [];
+      if (entry?.execution?.blockedBy?.controls?.length) return entry.execution.blockedBy.controls;
+    }
+    return [];
+  })();
+  if (overlayControls.length > 0) observation = { ...observation, overlayControls };
   // Direct-instruction mode: the planner works from the original
   // instruction alone. No structured goal is sent to the model.
   const directMode = isDirectInstructionGoal(goal);
@@ -515,7 +530,12 @@ instruction in "task" and return exactly ONE next JSON action
 - Decide only the next action. previousActions shows what was already
   executed: status "done" means it was carried out in the browser, "failed"
   means it was not. Never repeat a "done" action unless the user asked for
-  it more than once, and never repeat rejectedActions.
+  it more than once, and never repeat rejectedActions.${(observation.overlayControls?.length ?? 0) > 0 ? `
+- A notice or dialog is covering the page. previousActions names what each
+  action used by targetLabel; refs are renumbered every time the page is
+  observed, so a ref from an earlier look is NOT the same element now. Choose
+  a ref only from availableElements, by its label. A click takes no value:
+  leave value empty.` : ""}
 - pageActions, when present, lists actions that need no element.
 - For DOM actions use only availableElements refs and their allowedOperations.
   Never invent an element, an option or a value the user did not give.
@@ -704,7 +724,13 @@ ${process.env.COPILOT_ACTION_RISK_V2 !== "0"
               availableTabs,
                 previousActions: history.slice(-12).map(item => ({
                   operation: item.decision?.operation,
-                  ref: item.decision?.ref,
+                  // While a click that was covered by a notice is unresolved, a
+                  // ref from an earlier look is no longer the same element (the
+                  // notice can be replaced by another) and a model copies it. An
+                  // action with a name is then given by that name alone. At any
+                  // other time the number is a help and is given as before.
+                  ...((observation.overlayControls?.length ?? 0) > 0 && item.targetLabel
+                    ? {} : { ref: item.decision?.ref }),
                   ...(directMode && item.execution?.executionCompleted === false
                     ? { failed: true } : {}),
                   // A click that was covered by a dialog or banner says which

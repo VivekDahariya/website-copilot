@@ -716,6 +716,44 @@ function dragPlacement(element) {
 // target is not covered by a separate element. Page text is only measured and
 // shortened here; the planner treats it as untrusted data.
 export async function describeBlockingOverlay(handle) {
+  const described = await describeOverlayInPage(handle);
+  // A notice served from a separate frame (consent managers do this) is one
+  // box in the page: its name and buttons are inside that frame. Read them
+  // from there, the same short, clipped, untrusted text as for any overlay.
+  if (!described || (described.name && described.controls.length > 0)) return described;
+  try {
+    const frameHandle = await handle.evaluateHandle(element => {
+      const box = element.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!top) return null;
+      return top.tagName === "IFRAME" ? top : top.querySelector("iframe");
+    });
+    const frame = await frameHandle.asElement()?.contentFrame();
+    if (!frame) return described;
+    const inside = await frame.evaluate(() => {
+      const clean = text => String(text ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+      const shown = node => node.getClientRects().length > 0;
+      const heading = [...document.querySelectorAll("h1,h2,h3,[role=heading]")].find(shown);
+      // Buttons are what a person presses to answer a notice; links to its
+      // small print come after them, so a long list of links cannot push the
+      // buttons out of the short list.
+      const label = control => clean(control.innerText || control.value || control.getAttribute("aria-label"));
+      const buttons = [...document.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]')].filter(shown).map(label);
+      const links = [...document.querySelectorAll("a[href]")].filter(shown).map(label);
+      const controls = [...new Set([...buttons, ...links].filter(Boolean))].slice(0, 8);
+      return { name: clean(heading?.textContent || document.title), controls };
+    });
+    return {
+      kind: described.kind,
+      name: described.name || inside.name,
+      controls: described.controls.length > 0 ? described.controls : inside.controls
+    };
+  } catch {
+    return described;
+  }
+}
+
+function describeOverlayInPage(handle) {
   return handle.evaluate(element => {
     const clean = text => String(text ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
     const rect = element.getBoundingClientRect();
@@ -740,11 +778,11 @@ export async function describeBlockingOverlay(handle) {
       container.querySelector("h1,h2,h3,[role=heading]")?.textContent ||
       container.innerText
     );
-    const controls = [...container.querySelectorAll(
-      'button,a[href],[role="button"],input[type="button"],input[type="submit"]'
-    )].filter(control => control.getClientRects().length > 0)
-      .map(control => clean(control.innerText || control.value || control.getAttribute("aria-label")))
-      .filter(Boolean).slice(0, 6);
+    const shown = control => control.getClientRects().length > 0;
+    const label = control => clean(control.innerText || control.value || control.getAttribute("aria-label"));
+    const buttons = [...container.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]')].filter(shown).map(label);
+    const links = [...container.querySelectorAll("a[href]")].filter(shown).map(label);
+    const controls = [...new Set([...buttons, ...links].filter(Boolean))].slice(0, 8);
     return { kind, name, controls };
   });
 }

@@ -18,7 +18,7 @@ import { observeReliably, describeObservationFailure } from "../observer/reliabl
 import { resolveElement } from "../observer/dom-observer.js";
 import { readSelectiveEvidence } from "../observer/selective-evidence.js";
 import { getDomRevision, waitForRelevantDomChange } from "../observer/dom-change-watcher.js";
-import { executeAction } from "../executor/action-executor.js";
+import { executeAction, describeBlockingOverlay } from "../executor/action-executor.js";
 import {
   getEligiblePdfDownloadClick
 } from "./pdf-download-click-guard.js";
@@ -71,7 +71,7 @@ import { createProgressGuard } from "./progress-guard.js";
 import { createBrowserStateBaseline, rejectContradictoryFormAction } from "./browser-state-baseline.js";
 import { createFormMutationPolicy, isSubmitAction } from "./form-mutation-policy.js";
 import { isNavigationThenReadingTask } from "./webpage-answer.js";
-import { reachableElements } from "./covered-elements.js";
+import { measureCoverage, waitForCoveringLayer } from "./covered-elements.js";
 import { recoverExplicitBooleanAction } from "./explicit-boolean-recovery.js";
 import { recoverExplicitSubmitAction } from "./explicit-submit-recovery.js";
 import { verifySubmittedFormOutcome } from "./submission-outcome-evidence.js";
@@ -259,7 +259,13 @@ export async function runAgent(
   // Navigation recovery is bounded and never force-clicks obstructed DOM.
   let backNavigations = 0;
   let blockedClickRecoveries = 0;
+  // A click was covered by a dialog or banner. This holds until the controls
+  // that were covered can be reached again, which is measured, not assumed:
+  // an action that merely went through (a link inside the notice, say) does not
+  // end it.
   let overlayBlocked = false;
+  const blockedLabels = new Set();
+  let overlayControls = [];
   let mediaSaveFailures = 0;
   let rangeRejections = 0;
   let pageChangedRecoveries = 0;
@@ -347,6 +353,13 @@ export async function runAgent(
     if (page.url() !== dynamicRecoveryPage) {
       dynamicRecoveryPage = page.url();
       dynamicRecoveryAttempts = 0;
+    }
+
+    // While a click that was covered is still unresolved and an action has just
+    // gone through, a covering notice may be mid-replacement. Give a replacement a
+    // moment to appear before the page is observed.
+    if (overlayBlocked && history[history.length - 1]?.execution?.executionCompleted === true) {
+      await waitForCoveringLayer(page);
     }
 
     const revisionBeforePlanning = await getDomRevision(page);
@@ -903,14 +916,34 @@ export async function runAgent(
           ? { ref: "", operation: "done", value: "" } : null;
         checkCompletionNext = false;
         // After a click was covered by a dialog or banner, offer only the
-        // controls a click can reach until some action goes through.
-        const plannerObservation = overlayBlocked && !completionRequest &&
-          !directPdfDecision && !queuedFormAction
-          ? {
+        // controls a click can reach, and keep the notice's own buttons in
+        // view, until the controls that were covered can be reached again.
+        let plannerObservation = observation;
+        if (overlayBlocked && !completionRequest && !directPdfDecision && !queuedFormAction) {
+          const coverage = await measureCoverage(page, observation.actionableElements);
+          const labelOf = item => String(item?.label ?? '').trim().toLowerCase();
+          const stillCovered = blockedLabels.size > 0
+            ? coverage.covered.some(item => blockedLabels.has(labelOf(item)))
+            : coverage.covered.length > 0;
+          if (stillCovered) {
+            // The notice may have changed since the click (another panel, other
+            // buttons): describe what covers the page now.
+            const covering = coverage.covered.find(item => blockedLabels.has(labelOf(item))) ?? coverage.covered[0];
+            const handle = covering ? await resolveElement(page, covering.ref).catch(() => null) : null;
+            const fresh = handle ? await describeBlockingOverlay(handle).catch(() => null) : null;
+            if (fresh?.controls?.length) overlayControls = fresh.controls;
+            plannerObservation = {
               ...observation,
-              actionableElements: await reachableElements(page, observation.actionableElements)
-            }
-          : observation;
+              actionableElements: coverage.reachable.length > 0
+                ? coverage.reachable : observation.actionableElements,
+              ...(overlayControls.length > 0 ? { overlayControls } : {})
+            };
+          } else {
+            overlayBlocked = false;
+            blockedLabels.clear();
+            overlayControls = [];
+          }
+        }
         const candidate = completionRequest ?? directPdfDecision ?? queuedFormAction ?? await reasoner(
           originalInstruction,
           plannerObservation,
@@ -2468,7 +2501,12 @@ export async function runAgent(
         // repeat the same action against an unchanged observed page state.
         // A changed page fingerprint permits reconsideration after reobserve.
         stagnationRecovery.remember(observation, element, decision);
-        if (error.blockedBy) overlayBlocked = true;
+        if (error.blockedBy) {
+          overlayBlocked = true;
+          blockedLabels.add(String(element?.label ?? '').trim().toLowerCase());
+          blockedLabels.delete('');
+          if (error.blockedBy.controls?.length) overlayControls = error.blockedBy.controls;
+        }
         console.log('Click obstructed: suppressing identical retry on unchanged page state.');
         emitAgentEvent('action_failed', {
           operation: 'click', ref: decision.ref,
@@ -2827,7 +2865,6 @@ export async function runAgent(
       }
     }
 
-    if (result?.executionCompleted === true) overlayBlocked = false;
     let ineffectiveSelfNavigation=false;
 
     if(
